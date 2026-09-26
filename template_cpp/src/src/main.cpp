@@ -1,9 +1,11 @@
 #include <chrono>
 #include <iostream>
+#include <string>
 #include <thread>
 
-#include "parser.hpp"
 #include "hello.h"
+#include "config.hpp"
+#include "parser.hpp"
 #include <signal.h>
 
 
@@ -33,6 +35,14 @@ int main(int argc, char **argv) {
   Parser parser(argc, argv);
   parser.parse();
 
+  // Check id is within range defined implicitly by hosts
+  auto hosts = parser.hosts();
+  if (parser.id() < 1 || parser.id() > hosts.size()) {
+    std::cerr << "Error: --id " << parser.id() << " is not in the hosts file (valid: 1 - "
+              << hosts.size() << ")\n";
+    return EXIT_FAILURE;
+  }
+
   hello();
   std::cout << std::endl;
 
@@ -44,7 +54,6 @@ int main(int argc, char **argv) {
 
   std::cout << "List of resolved hosts is:\n";
   std::cout << "==========================\n";
-  auto hosts = parser.hosts();
   for (auto &host : hosts) {
     std::cout << host.id << "\n";
     std::cout << "Human-readable IP: " << host.ipReadable() << "\n";
@@ -64,6 +73,24 @@ int main(int argc, char **argv) {
   std::cout << parser.configPath() << "\n\n";
 
   std::cout << "Doing some initialization...\n\n";
+
+  PerfectLinksConfig config;
+  try {
+    config = parsePerfectLinksConfig(parser.configPath(), hosts.size());
+  } catch (const std::exception &e) {
+    std::cerr << "Error: " << e.what() << "\n";
+    return EXIT_FAILURE;
+  }
+
+  const bool isReceiver = (parser.id() == config.receiver_id);
+
+  if (isReceiver) {
+    std::cout << "I am the RECEIVER.\n\n";
+  } else {
+    std::cout << "I am a SENDER: sending " << config.msg_count << " messages to process "
+              << config.receiver_id << ".\n\n";
+  }
+
 
   std::cout << "Broadcasting and delivering messages...\n\n";
 
