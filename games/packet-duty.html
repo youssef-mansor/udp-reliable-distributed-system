@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Packet Duty</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#EDF0EB; --surface:#FAFBF8; --sunk:#E3E8E2; --ink:#17201C; --muted:#5B665F; --line:#D2D9D3;
+  --accent:#2D47C9; --accent-ink:#FFFFFF;
+  --f-type:#B7791F; --f-sender:#1D8577; --f-res:#8C958F; --f-seq:#2D47C9; --f-pay:#8A3D8E;
+  --good:#2C7A38; --bad:#BC3324; --warn:#A86C12;
+  --good-bg:#E1F0E2; --bad-bg:#F7E2DE; --warn-bg:#F6ECD8;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+    --accent:#8197FF; --accent-ink:#0C1020;
+    --f-type:#E2A84C; --f-sender:#4BC3B1; --f-res:#6C7671; --f-seq:#8197FF; --f-pay:#CB80CF;
+    --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+    --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+  --accent:#8197FF; --accent-ink:#0C1020;
+  --f-type:#E2A84C; --f-sender:#4BC3B1; --f-res:#6C7671; --f-seq:#8197FF; --f-pay:#CB80CF;
+  --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+  --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+}
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.5; padding-inline:16px; padding-block:24px 48px}
+.wrap{max-width:1120px; margin:0 auto; display:flex; flex-direction:column; gap:20px}
+h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; letter-spacing:-0.01em}
+h1{font-size:clamp(28px,5vw,44px); font-weight:800; line-height:1.05}
+h2{font-size:22px; font-weight:800}
+h3{font-size:16px; font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+button{font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); padding:8px 14px}
+button:hover:not(:disabled){border-color:var(--ink)}
+button:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button:disabled{opacity:.45; cursor:not-allowed}
+button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+button.primary:hover:not(:disabled){filter:brightness(1.08); border-color:var(--accent)}
+input[type=number]{font-family:var(--mono); font-size:15px; width:96px; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink)}
+
+/* header */
+.top{display:flex; flex-wrap:wrap; align-items:end; justify-content:space-between; gap:12px}
+.top .sub{max-width:62ch}
+
+/* role picker */
+.roles{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px}
+.role{text-align:left; padding:20px; border-radius:14px; display:flex; flex-direction:column; gap:10px; background:var(--surface)}
+.role h2{font-size:26px}
+.role ul{margin:0; padding-left:18px; color:var(--muted)}
+.role .go{margin-top:auto; font-family:var(--mono); font-size:13px; color:var(--accent)}
+
+/* layout */
+.game{display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:20px; align-items:start}
+@media (max-width:880px){ .game{grid-template-columns:minmax(0,1fr)} }
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px; display:flex; flex-direction:column; gap:14px}
+.side{display:flex; flex-direction:column; gap:16px}
+.bar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between}
+.row{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+
+/* byte strip */
+.strip-scroll{overflow-x:auto; padding-bottom:4px}
+.strip{display:flex; gap:6px; width:max-content}
+.fld{display:flex; flex-direction:column; gap:4px}
+.bytes{display:flex; border-radius:6px; overflow:hidden; border:1px solid var(--line)}
+.byte{font-family:var(--mono); font-size:13px; padding:6px 5px; min-width:28px; text-align:center; border-right:1px solid color-mix(in srgb, var(--line) 60%, transparent)}
+.byte:last-child{border-right:0}
+.fld .lab{font-family:var(--mono); font-size:10.5px; color:var(--muted); line-height:1.25}
+.fld .lab b{color:var(--ink); font-weight:600}
+.f-type .bytes{background:color-mix(in srgb, var(--f-type) 18%, var(--surface)); border-color:var(--f-type)}
+.f-sender .bytes{background:color-mix(in srgb, var(--f-sender) 18%, var(--surface)); border-color:var(--f-sender)}
+.f-res .bytes{background:color-mix(in srgb, var(--f-res) 14%, var(--surface)); border-color:var(--f-res)}
+.f-seq .bytes{background:color-mix(in srgb, var(--f-seq) 18%, var(--surface)); border-color:var(--f-seq)}
+.f-pay .bytes{background:color-mix(in srgb, var(--f-pay) 16%, var(--surface)); border-color:var(--f-pay)}
+.pkt-meta{font-family:var(--mono); font-size:12px; color:var(--muted)}
+
+/* messages / decisions */
+.decide{display:flex; flex-direction:column; gap:8px}
+.msg{display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--sunk)}
+.msg .id{font-family:var(--mono); font-weight:600; min-width:92px}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+.seg button{border:0; border-radius:0; padding:6px 12px; background:var(--surface)}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"].d{background:var(--good); color:var(--surface)}
+.seg button[aria-pressed="true"].x{background:var(--ink); color:var(--surface)}
+
+/* memory */
+.mem{display:flex; flex-direction:column; gap:10px}
+.cells{display:grid; grid-template-columns:repeat(auto-fill,minmax(30px,1fr)); gap:4px}
+.cell{font-family:var(--mono); font-size:11px; text-align:center; padding:5px 0; border-radius:5px; background:var(--sunk); color:var(--muted); border:1px solid var(--line)}
+.cell.got{background:color-mix(in srgb, var(--good) 22%, var(--surface)); color:var(--ink); border-color:color-mix(in srgb, var(--good) 50%, var(--line))}
+.cell.ooo{background:color-mix(in srgb, var(--warn) 24%, var(--surface)); color:var(--ink); border-color:var(--warn)}
+.cell.fly{background:color-mix(in srgb, var(--accent) 20%, var(--surface)); color:var(--ink); border-color:color-mix(in srgb, var(--accent) 55%, var(--line))}
+.cell.dup{outline:2px solid var(--bad)}
+.kv{display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-family:var(--mono); font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0; font-weight:600}
+
+/* feedback */
+.fb{border-radius:10px; padding:10px 12px; font-size:14px; display:flex; flex-direction:column; gap:4px}
+.fb.good{background:var(--good-bg); border:1px solid color-mix(in srgb, var(--good) 40%, transparent)}
+.fb.bad{background:var(--bad-bg); border:1px solid color-mix(in srgb, var(--bad) 45%, transparent)}
+.fb.warn{background:var(--warn-bg); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent)}
+.fb ul{margin:0; padding-left:18px}
+.tag{font-family:var(--mono); font-size:11px; padding:2px 7px; border-radius:99px; border:1px solid currentColor; white-space:nowrap}
+.t-good{color:var(--good)} .t-bad{color:var(--bad)} .t-warn{color:var(--warn)} .t-acc{color:var(--accent)}
+
+/* score */
+.score{font-family:var(--display); font-weight:800; font-size:40px; line-height:1; font-variant-numeric:tabular-nums}
+.stats{display:grid; grid-template-columns:1fr auto; gap:4px 12px; font-size:13px}
+.stats span:nth-child(even){font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right}
+
+/* log */
+.log{font-family:var(--mono); font-size:12.5px; background:var(--sunk); border:1px solid var(--line); border-radius:8px; padding:8px 10px; max-height:220px; overflow:auto; white-space:pre}
+.log .bad{color:var(--bad)}
+.feed{display:flex; flex-direction:column; gap:6px; font-size:13px; max-height:260px; overflow:auto}
+.feed div{display:flex; gap:8px} .feed .t{font-family:var(--mono); color:var(--muted); min-width:34px}
+
+/* table */
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-size:13px}
+th,td{text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); white-space:nowrap}
+th{font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:400}
+td.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+tr.timeout td{background:var(--warn-bg)}
+
+.legend{display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--muted)}
+.legend i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px}
+.rules{font-size:13.5px; display:flex; flex-direction:column; gap:8px}
+.rules code{font-family:var(--mono); font-size:12.5px; background:var(--sunk); padding:1px 5px; border-radius:4px}
+.checks{display:flex; flex-direction:column; gap:6px}
+.checks label{display:flex; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--sunk); font-family:var(--mono); font-size:13px; cursor:pointer}
+.big-result{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px}
+.verdict{padding:14px; border-radius:12px; border:1px solid var(--line); background:var(--sunk); display:flex; flex-direction:column; gap:4px}
+.verdict .v{font-family:var(--display); font-weight:800; font-size:22px}
+@media (prefers-reduced-motion:no-preference){ .pop{animation:pop .25s ease-out} @keyframes pop{from{transform:translateY(4px); opacity:.6} to{transform:none; opacity:1}} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <span class="eyebrow">Milestone 1 · Perfect Links over UDP</span>
+      <h1>Packet Duty</h1>
+      <p class="sub muted">You are one process in the system. The network loses 25% of packets, reorders them, and never tells anyone. Make the link perfect anyway.</p>
+    </div>
+    <button id="homeBtn" hidden>← Change role</button>
+  </header>
+  <main id="app"></main>
+</div>
+
+<script>
+(function(){
+const app = document.getElementById('app');
+const homeBtn = document.getElementById('homeBtn');
+const rnd = (a,b)=> a + Math.floor(Math.random()*(b-a+1));
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- packet encoding + rendering ---------- */
+const u32 = v => [(v>>>24)&255,(v>>>16)&255,(v>>>8)&255,v&255];
+const hex = b => b.toString(16).toUpperCase().padStart(2,'0');
+function field(cls, bytes, name, value){
+  return `<div class="fld ${cls}"><div class="bytes">${bytes.map(b=>`<span class="byte">${b===null?'··':hex(b)}</span>`).join('')}</div><div class="lab">${name}<br><b>${value}</b></div></div>`;
+}
+function stripHTML(p){
+  // p: {type, sender, seq (number|null), payloads:[]}
+  const seqBytes = (p.seq===null||p.seq===undefined||isNaN(p.seq)) ? [null,null,null,null] : u32(p.seq);
+  let h = field('f-type',[p.type],'type',p.type===0?'0 = DATA':'1 = ACK')
+        + field('f-sender',[p.sender],'sender_id',p.sender)
+        + field('f-res',[0,0],'reserved','0')
+        + field('f-seq',seqBytes,'seq',(p.seq===null||isNaN(p.seq))?'?':p.seq);
+  (p.payloads||[]).forEach((v,i)=>{ h += field('f-pay',u32(v),'payload '+(i+1), v); });
+  const size = 8 + 4*(p.payloads||[]).length;
+  return `<div class="strip-scroll"><div class="strip">${h}</div></div><div class="pkt-meta">${size} bytes on the wire · offsets 0 / 1 / 2–3 / 4–7${p.payloads&&p.payloads.length?' / 8…':''}</div>`;
+}
+const legend = `<div class="legend"><span><i style="background:var(--f-type)"></i>type</span><span><i style="background:var(--f-sender)"></i>sender_id</span><span><i style="background:var(--f-res)"></i>reserved</span><span><i style="background:var(--f-seq)"></i>seq (u32, network order)</span><span><i style="background:var(--f-pay)"></i>payload (u32)</span></div>`;
+
+/* ---------- home ---------- */
+function home(){
+  homeBtn.hidden = true;
+  app.innerHTML = `
+  <div class="wrap" style="gap:16px">
+    <div class="roles">
+      <button class="role" data-role="receiver">
+        <span class="eyebrow">Process 2 · the receiver</span>
+        <h2>Play the receiver</h2>
+        <ul>
+          <li>DATA packets from process 1 arrive: lost, late, out of order, duplicated.</li>
+          <li>Decode each packet, then <b>deliver</b> or <b>discard</b> every message in it.</li>
+          <li>Send cumulative ACKs. Lie in an ACK and messages are lost forever.</li>
+        </ul>
+        <span class="go">You'll be tested on PL2 (no duplication) and cumulative ACKs →</span>
+      </button>
+      <button class="role" data-role="sender">
+        <span class="eyebrow">Process 1 · a sender</span>
+        <h2>Play the sender</h2>
+        <ul>
+          <li>Send 20 messages to process 2 in packets of up to 8.</li>
+          <li>Write the header's <code class="mono">seq</code> yourself. You never learn what was lost.</li>
+          <li>Read cumulative ACKs, decide what's confirmed, retransmit on timeout.</li>
+        </ul>
+        <span class="go">You'll be tested on PL1 (reliable delivery) and batching →</span>
+      </button>
+    </div>
+    <div class="panel">
+      <h3>The packet format you designed</h3>
+      ${stripHTML({type:0,sender:1,seq:17,payloads:[17,18,19]})}
+      ${legend}
+      <p class="muted" style="font-size:13.5px">A DATA packet carrying messages 17, 18 and 19. The header's <code class="mono">seq</code> is the first message's number, and k = (bytes − 8) / 4 = 3. An ACK is the 8-byte header alone, with <code class="mono">type = 1</code>.</p>
+    </div>
+  </div>`;
+  app.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=> b.dataset.role==='receiver'? Receiver.start() : Sender.start());
+}
+homeBtn.onclick = home;
+
+/* =====================================================================
+   RECEIVER MODE
+   ===================================================================== */
+const Receiver = (()=>{
+  const M=24, LOSS=0.25, ACK_LOSS=0.2, TIMEOUT=4, ACK_EVERY=3, ME=2, PEER=1;
+  let r;
+  function contiguous(){ let c=0; while(r.delivered.has(c+1)) c++; return c; }
+  function feed(msg, cls=''){ r.events.unshift({t:r.tick, msg, cls}); }
+
+  function start(){
+    homeBtn.hidden=false;
+    const batches=[]; let s=1;
+    while(s<=M){ const k=Math.min(M-s+1, rnd(3,8)); batches.push({first:s,k,lastSent:null}); s+=k; }
+    r={tick:0,batches,nextBatch:0,senderAck:0,inFlight:[],ackFlight:[],inbox:[],current:null,
+       delivered:new Set(),log:[],score:0,decodeLeft:3,sinceAck:0,phase:'decide',events:[],
+       ackReason:'',feedback:null,choices:{},hard:false,
+       stats:{sentData:0,lostData:0,lostAck:0,dupArrivals:0,pl2:0,missed:0,over:0,under:0,acks:0,handled:0}};
+    senderStep();
+    nextEvent();
+    render();
+  }
+  function transmit(b, isRetx){
+    b.lastSent=r.tick; r.stats.sentData++;
+    if(Math.random()<LOSS){ r.stats.lostData++; return; }
+    r.inFlight.push({first:b.first,k:b.k,arrive:r.tick+1+rnd(0,2),retx:isRetx});
+  }
+  function senderStep(){
+    r.ackFlight = r.ackFlight.filter(a=>{ if(a.arrive<=r.tick){ r.senderAck=Math.max(r.senderAck,a.v); return false;} return true; });
+    for(let i=0;i<r.nextBatch;i++){ const b=r.batches[i];
+      if(b.first+b.k-1 > r.senderAck && r.tick-b.lastSent>=TIMEOUT) transmit(b,true); }
+    if(r.nextBatch<r.batches.length) transmit(r.batches[r.nextBatch++],false);
+  }
+  function advance(){
+    r.tick++; senderStep();
+    const arrived=r.inFlight.filter(p=>p.arrive<=r.tick).sort(()=>Math.random()-.5);
+    r.inFlight=r.inFlight.filter(p=>p.arrive>r.tick);
+    r.inbox.push(...arrived);
+  }
+  function done(){ return r.senderAck>=M && r.inFlight.length===0 && r.inbox.length===0; }
+  function nextEvent(){
+    if(r.sinceAck>=ACK_EVERY){ r.phase='ack'; r.ackReason=`You've handled ${ACK_EVERY} packets since your last ACK.`; return; }
+    let idle=0;
+    while(r.inbox.length===0){
+      if(done() && r.sinceAck===0){ r.phase='over'; return; }
+      if(r.sinceAck>0 && idle>=1){ r.phase='ack'; r.ackReason='Your ACK delay timer fired: nothing new arrived for a tick.'; return; }
+      if(r.tick>300){ r.phase='over'; return; }
+      advance(); idle++;
+    }
+    const p=r.inbox.shift();
+    const seqs=[...Array(p.k)].map((_,i)=>p.first+i);
+    if(seqs.every(s=>r.delivered.has(s))) r.stats.dupArrivals++;
+    r.current={...p, decoded:r.decodeLeft<=0, wrongDecode:0};
+    r.choices={}; r.phase='decide';
+  }
+
+  function submitDecisions(){
+    const p=r.current, seqs=[...Array(p.k)].map((_,i)=>p.first+i);
+    if(seqs.some(s=>!r.choices[s])) return;
+    const lines=[]; let bad=false, warn=false;
+    seqs.forEach(s=>{
+      const isNew=!r.delivered.has(s), c=r.choices[s];
+      if(c==='d' && isNew){ r.delivered.add(s); r.log.push({s}); r.score+=10; lines.push(`#${s}: delivered ✓`); }
+      else if(c==='d'){ r.log.push({s,dup:true}); r.score-=25; r.stats.pl2++; bad=true; lines.push(`#${s}: <b>delivered twice. PL2 violated.</b> You wrote "d ${PEER} ${s}" to the log a second time.`); }
+      else if(!isNew){ r.score+=10; lines.push(`#${s}: discarded duplicate ✓`); }
+      else { r.score-=5; r.stats.missed++; warn=true; lines.push(`#${s}: <b>discarded a NEW message.</b> Not a violation yet, but it now needs a retransmission. Don't ACK past it.`); }
+    });
+    r.stats.handled++; r.sinceAck++;
+    r.feedback={cls:bad?'bad':warn?'warn':'good', title:bad?'Duplicate delivery':warn?'Missed a message':'Packet handled correctly', lines};
+    feed(`DATA [${seqs[0]}–${seqs[seqs.length-1]}] processed`, bad?'t-bad':warn?'t-warn':'');
+    nextEvent(); render();
+  }
+  function submitAck(v){
+    const c=contiguous(); r.stats.acks++;
+    let fb;
+    if(v===c){ r.score+=15; fb={cls:'good',title:`ACK ${v}: exactly right`,lines:[`Everything ≤ ${c} is delivered, and ${c+1} isn't. That's your cumulative point.`]}; }
+    else if(v<c){ r.score-=5; r.stats.under++; fb={cls:'warn',title:`ACK ${v}: too low (you have everything up to ${c})`,lines:[`Safe but wasteful: the sender will keep retransmitting ${v+1}–${c}, which you already have.`]}; }
+    else { r.score-=40; r.stats.over++; const missing=[]; for(let s=c+1;s<=v;s++) if(!r.delivered.has(s)) missing.push(s);
+      fb={cls:'bad',title:`ACK ${v}: you claimed messages you don't have`,lines:[`Missing: ${missing.join(', ')}. The sender will stop retransmitting them. If they were lost, they're gone for good, which breaks PL1.`]}; }
+    if(Math.random()<ACK_LOSS){ r.stats.lostAck++; } else r.ackFlight.push({v,arrive:r.tick+1});
+    feed(`You sent ACK ${v}`, v>c?'t-bad':'');
+    r.sinceAck=0; r.feedback=fb;
+    nextEvent(); render();
+  }
+
+  function memoryHTML(){
+    const c=contiguous(); const above=[...r.delivered].filter(s=>s>c).sort((a,b)=>a-b);
+    const dupSet=new Set(r.log.filter(l=>l.dup).map(l=>l.s));
+    let cells=''; for(let s=1;s<=M;s++){ const got=r.delivered.has(s); cells+=`<span class="cell ${got?(s<=c?'got':'ooo'):''} ${dupSet.has(s)?'dup':''}">${s}</span>`; }
+    return `<div class="panel mem">
+      <div class="bar"><h3>Your memory (sender ${PEER})</h3>
+        <label class="row muted" style="font-size:12px;gap:6px"><input type="checkbox" id="hardMode" ${r.hard?'checked':''}> hide (hard mode)</label></div>
+      ${r.hard?'<p class="muted" style="font-size:13px">Hidden. Work it out from your output log.</p>':`
+      <dl class="kv"><dt>contiguous</dt><dd>${c}</dd><dt>out-of-order set</dt><dd>{${above.join(', ')}}</dd></dl>
+      <div class="cells">${cells}</div>
+      <div class="legend"><span><i style="background:var(--good)"></i>≤ contiguous</span><span><i style="background:var(--warn)"></i>in the set</span><span><i style="background:var(--sunk);border:1px solid var(--line)"></i>not delivered</span></div>
+      <p class="muted" style="font-size:12.5px">Duplicate rule: <span class="mono">seq ≤ ${c}</span> or <span class="mono">seq ∈ set</span>, else new.</p>`}
+    </div>`;
+  }
+  function sideHTML(){
+    const st=r.stats;
+    return `<aside class="side">
+      <div class="panel"><span class="eyebrow">Score</span><div class="score">${r.score}</div>
+        <div class="stats"><span>tick</span><span>${r.tick}</span><span>packets handled</span><span>${st.handled}</span>
+        <span>duplicate packets seen</span><span>${st.dupArrivals}</span><span>PL2 violations</span><span class="${st.pl2?'t-bad':''}">${st.pl2}</span>
+        <span>over-ACKs</span><span class="${st.over?'t-bad':''}">${st.over}</span></div></div>
+      ${memoryHTML()}
+      <div class="panel"><h3>Output file <span class="muted mono" style="font-weight:400;font-size:12px">2.output</span></h3>
+        <div class="log">${r.log.length?r.log.map(l=>l.dup?`<span class="bad">d ${PEER} ${l.s}   ← duplicate</span>`:`d ${PEER} ${l.s}`).join('\n'):'<span class="muted">(empty)</span>'}</div></div>
+    </aside>`;
+  }
+  function decideHTML(){
+    const p=r.current, seqs=[...Array(p.k)].map((_,i)=>p.first+i), size=8+4*p.k;
+    let body;
+    if(!p.decoded){
+      body=`<div class="panel pop" style="background:var(--sunk)">
+        <h3>Decode it first: how many messages are inside?</h3>
+        <p class="muted" style="font-size:13.5px">recvfrom() returned <b class="mono">${size}</b> bytes. You have no count field. Use the length.</p>
+        <div class="row"><label for="kIn" class="mono">k =</label><input type="number" id="kIn" min="1" max="8"><button class="primary" id="kGo">Check</button>
+        ${p.wrongDecode?`<span class="t-bad" style="font-size:13px">Not quite. k = (${size} − 8) / 4</span>`:''}</div>
+        <p class="muted" style="font-size:12px">${r.decodeLeft} decoding drill${r.decodeLeft===1?'':'s'} left, then it's automatic.</p></div>`;
+    } else {
+      body=`<div class="decide">
+        <p class="muted" style="font-size:13.5px">Messages <b class="mono">${seqs[0]}…${seqs[seqs.length-1]}</b> (header seq ${p.first}, k = ${p.k}). For each one: deliver it (write <span class="mono">d ${PEER} seq</span> to your log) or discard it as a duplicate.</p>
+        ${seqs.map(s=>`<div class="msg"><span class="id">msg ${s}</span>
+          <span class="seg" role="group" aria-label="message ${s}"><button class="d" data-s="${s}" data-c="d" aria-pressed="${r.choices[s]==='d'}">Deliver</button><button class="x" data-s="${s}" data-c="x" aria-pressed="${r.choices[s]==='x'}">Discard</button></span></div>`).join('')}
+        <div class="row"><button class="primary" id="decGo" ${seqs.every(s=>r.choices[s])?'':'disabled'}>Process packet</button>
+          <button id="allD">All deliver</button><button id="allX">All discard</button></div></div>`;
+    }
+    return `<div class="panel pop">
+      <div class="bar"><div><span class="eyebrow">Tick ${r.tick} · incoming on port 11002</span><h2>DATA packet from process ${PEER}</h2></div>
+      <span class="tag t-acc">${p.retx?'possibly a retransmission':'arrived'}</span></div>
+      ${stripHTML({type:0,sender:PEER,seq:p.first,payloads:seqs})}
+      ${body}</div>`;
+  }
+  function ackHTML(){
+    const pre=r.ackDraft??'';
+    return `<div class="panel pop">
+      <div><span class="eyebrow">Tick ${r.tick} · time to acknowledge</span><h2>Build your ACK to process ${PEER}</h2></div>
+      <p class="muted">${esc(r.ackReason)} Set the cumulative <span class="mono">seq</span>: "I have delivered <i>everything</i> ≤ seq from you."</p>
+      <div id="ackPrev">${stripHTML({type:1,sender:ME,seq:pre===''?null:Number(pre)})}</div>
+      <div class="row"><label for="ackIn" class="mono">seq =</label><input type="number" id="ackIn" min="0" max="${M}" value="${esc(pre)}"><button class="primary" id="ackGo" ${pre===''?'disabled':''}>Send ACK</button></div>
+      <p class="muted" style="font-size:12.5px">20% of ACKs are lost on the way back, and you won't be told. The sender retransmits whatever isn't covered after ${TIMEOUT} ticks.</p>
+    </div>`;
+  }
+  function overHTML(){
+    const missing=[]; for(let s=1;s<=M;s++) if(!r.delivered.has(s)) missing.push(s);
+    const pl1=missing.length===0, pl2=r.stats.pl2===0, st=r.stats;
+    return `<div class="panel pop">
+      <div><span class="eyebrow">Round over · tick ${r.tick}</span><h2>${pl1&&pl2?'The link was perfect':'The link broke'}</h2></div>
+      <div class="big-result">
+        <div class="verdict"><span class="eyebrow">PL1 · reliable delivery</span><span class="v ${pl1?'t-good':'t-bad'}">${pl1?'Held':'Violated'}</span>
+          <span class="muted" style="font-size:13px">${pl1?`All ${M} messages delivered.`:`Never delivered: ${missing.join(', ')}. The sender stopped because an ACK covered them.`}</span></div>
+        <div class="verdict"><span class="eyebrow">PL2 · no duplication</span><span class="v ${pl2?'t-good':'t-bad'}">${pl2?'Held':'Violated'}</span>
+          <span class="muted" style="font-size:13px">${pl2?'No message logged twice.':`${st.pl2} duplicate log line(s).`}</span></div>
+        <div class="verdict"><span class="eyebrow">Final score</span><span class="v">${r.score}</span>
+          <span class="muted" style="font-size:13px">${st.acks} ACKs sent, ${st.under} too low, ${st.over} too high.</span></div>
+      </div>
+      <div class="fb warn"><b>What the network hid from you</b>
+        <ul><li>Process ${PEER} put ${st.sentData} DATA packets on the wire for ${r.batches.length} batches. <b>${st.lostData}</b> were lost.</li>
+        <li><b>${st.lostAck}</b> of your ${st.acks} ACKs never arrived.</li>
+        <li>${st.dupArrivals} packet(s) you received were complete duplicates. That's the price of retransmission, and it's why PL2 needs your memory.</li></ul></div>
+      <div class="row"><button class="primary" id="again">Play receiver again</button><button id="swap">Try the sender</button></div>
+    </div>`;
+  }
+  function render(){
+    let main;
+    if(r.phase==='decide') main=decideHTML(); else if(r.phase==='ack') main=ackHTML(); else main=overHTML();
+    const fb=r.feedback?`<div class="fb ${r.feedback.cls}"><b>${esc(r.feedback.title)}</b><ul>${r.feedback.lines.map(l=>`<li>${l}</li>`).join('')}</ul></div>`:'';
+    app.innerHTML=`<div class="game"><div class="wrap" style="gap:16px">${fb}${main}
+      <div class="panel"><h3>Event feed</h3><div class="feed">${r.events.slice(0,30).map(e=>`<div><span class="t">t${e.t}</span><span class="${e.cls}">${esc(e.msg)}</span></div>`).join('')||'<span class="muted">Nothing yet.</span>'}</div></div>
+      </div>${sideHTML()}</div>`;
+    wire();
+  }
+  function wire(){
+    const $=id=>document.getElementById(id);
+    const hm=$('hardMode'); if(hm) hm.onchange=()=>{ r.hard=hm.checked; render(); };
+    if(r.phase==='decide'){
+      const kGo=$('kGo');
+      if(kGo){ const go=()=>{ const v=Number($('kIn').value); if(v===r.current.k){ r.current.decoded=true; r.decodeLeft--; } else r.current.wrongDecode++; render(); if(!r.current.decoded) $('kIn').focus(); };
+        kGo.onclick=go; $('kIn').onkeydown=e=>{ if(e.key==='Enter') go(); }; $('kIn').focus(); }
+      app.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{ r.choices[b.dataset.s]=b.dataset.c; render(); });
+      const all=(c)=>{ for(let i=0;i<r.current.k;i++) r.choices[r.current.first+i]=c; render(); };
+      if($('allD')) $('allD').onclick=()=>all('d'); if($('allX')) $('allX').onclick=()=>all('x');
+      if($('decGo')) $('decGo').onclick=()=>{ r.feedback=null; submitDecisions(); };
+    } else if(r.phase==='ack'){
+      const inp=$('ackIn'), btn=$('ackGo');
+      inp.oninput=()=>{ r.ackDraft=inp.value; $('ackPrev').innerHTML=stripHTML({type:1,sender:ME,seq:inp.value===''?null:Number(inp.value)}); btn.disabled=inp.value===''||Number(inp.value)<0; };
+      const go=()=>{ if(inp.value==='') return; const v=Math.max(0,Math.floor(Number(inp.value))); r.ackDraft=''; submitAck(v); };
+      btn.onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter') go(); }; inp.focus();
+    } else {
+      $('again').onclick=start; $('swap').onclick=()=>Sender.start();
+    }
+  }
+  return {start};
+})();
+
+/* =====================================================================
+   SENDER MODE
+   ===================================================================== */
+const Sender = (()=>{
+  const M=20, LOSS=0.25, ACK_LOSS=0.2, TIMEOUT=4, MAXK=8, ME=1, PEER=2;
+  let s;
+  function feed(msg, cls=''){ s.events.unshift({t:s.tick,msg,cls}); }
+  function start(){
+    homeBtn.hidden=false;
+    s={tick:0,nextSeq:1,packets:[],dataFlight:[],ackFlight:[],rcv:new Set(),pendingAcks:[],phase:'act',
+       events:[],score:0,k:MAXK,seqDraft:'',feedback:null,ackSel:{},highestAck:0,
+       stats:{sent:0,retx:0,early:0,lostData:0,lostAck:0,ackMistakes:0,seqMistakes:0,ignored:0}};
+    feed('Round start. Messages 1–20 are waiting to be sent to process 2.');
+    render();
+  }
+  const last=p=>p.first+p.k-1;
+  const unconfirmed=()=>s.packets.filter(p=>!p.confirmed);
+  function transmit(p){
+    p.lastSent=s.tick; p.sends++; s.stats.sent++;
+    if(Math.random()<LOSS){ s.stats.lostData++; p.lost=(p.lost||0)+1; return; }
+    s.dataFlight.push({first:p.first,k:p.k,arrive:s.tick+1+rnd(0,1)});
+  }
+  function sendNew(){
+    const v=Number(s.seqDraft); const k=Math.min(s.k, M-s.nextSeq+1);
+    if(s.seqDraft===''||v!==s.nextSeq){
+      s.score-=10; s.stats.seqMistakes++;
+      const why = v<s.nextSeq ? `Messages ${v}…${v+k-1} start before your next unsent message (${s.nextSeq}). The receiver would treat them as duplicates or overlapping data, and ${s.nextSeq}+ would never be sent.`
+                              : `Starting at ${v} skips message(s) ${s.nextSeq}…${v-1}. They'd never be sent, and the receiver's contiguous counter would be stuck below them forever (PL1).`;
+      s.feedback={cls:'bad',title:`Header seq ${esc(s.seqDraft)} is wrong. Packet not sent.`,lines:[why,`The header seq must be the first message in this packet: <b>${s.nextSeq}</b>.`]};
+      render(); return;
+    }
+    const p={id:s.packets.length+1,first:v,k,lastSent:null,sends:0,confirmed:false};
+    s.packets.push(p); s.nextSeq+=k; s.seqDraft=''; s.score+=5;
+    transmit(p);
+    feed(`Sent packet #${p.id}: messages ${p.first}–${last(p)} (${8+4*k} bytes)`);
+    s.feedback=k<MAXK && s.nextSeq<=M ? {cls:'warn',title:`Sent ${k} message${k>1?'s':''}`,lines:[`Fine, but you had room for ${MAXK}. Every packet costs a sendto() syscall. Fuller packets mean higher throughput.`]} : {cls:'good',title:`Packet #${p.id} is on the wire`,lines:[`b ${p.first} … b ${last(p)} go into your output file now, when you send, not when the ACK arrives.`]};
+    s.k=Math.min(MAXK, Math.max(1,M-s.nextSeq+1));
+    render();
+  }
+  function retransmit(id){
+    const p=s.packets.find(x=>x.id===id); if(!p||p.confirmed||p.lastSent===s.tick) return;
+    const age=s.tick-p.lastSent;
+    if(age<TIMEOUT){ s.stats.early++; s.score-=3; s.feedback={cls:'warn',title:`Early retransmit of #${id}`,lines:[`It's only been ${age} tick(s). The original may still be in flight or its ACK on the way. Allowed, but it costs a syscall and receiver work.`]}; }
+    else { s.score+=3; s.feedback={cls:'good',title:`Retransmitted #${id} after timeout`,lines:[`No ACK covered messages ${p.first}–${last(p)} within ${TIMEOUT} ticks. Resending is exactly what PL1 requires.`]}; }
+    s.stats.retx++; transmit(p); feed(`Retransmitted #${id} (${p.first}–${last(p)})`, age<TIMEOUT?'t-warn':'');
+    render();
+  }
+  function nextTick(){
+    const ignored=unconfirmed().filter(p=>s.tick-p.lastSent>=TIMEOUT && p.lastSent!==s.tick);
+    s.feedback=null;
+    if(ignored.length){ s.stats.ignored+=ignored.length; s.score-=4*ignored.length;
+      s.feedback={cls:'warn',title:'Timed-out packets left waiting',lines:[`#${ignored.map(p=>p.id).join(', #')} timed out and you didn't resend. If they were lost, nothing will ever deliver them.`]}; }
+    s.tick++;
+    // receiver side (simulated, correct implementation)
+    s.dataFlight=s.dataFlight.filter(d=>{ if(d.arrive<=s.tick){
+      for(let i=0;i<d.k;i++) s.rcv.add(d.first+i);
+      let c=0; while(s.rcv.has(c+1)) c++;
+      if(Math.random()<ACK_LOSS) s.stats.lostAck++; else s.ackFlight.push({v:c,arrive:s.tick+1});
+      return false; } return true; });
+    // ACKs reaching you
+    s.ackFlight=s.ackFlight.filter(a=>{ if(a.arrive<=s.tick){ s.pendingAcks.push(a.v); return false;} return true; });
+    if(s.pendingAcks.length){ s.phase='ack'; s.ackSel={}; }
+    render();
+  }
+  function submitAckRead(){
+    const N=Math.max(...s.pendingAcks);
+    const cand=unconfirmed();
+    const shouldIds=new Set(cand.filter(p=>last(p)<=N).map(p=>p.id));
+    const wrongStop=cand.filter(p=>s.ackSel[p.id] && !shouldIds.has(p.id));
+    const missed=cand.filter(p=>!s.ackSel[p.id] && shouldIds.has(p.id));
+    const partial=cand.filter(p=>p.first<=N && last(p)>N);
+    const lines=[];
+    if(s.pendingAcks.length>1) lines.push(`${s.pendingAcks.length} ACKs arrived (${s.pendingAcks.join(', ')}). They're cumulative, so only the highest, <b>${N}</b>, matters.`);
+    wrongStop.forEach(p=>lines.push(`<b>#${p.id} (${p.first}–${last(p)}) is NOT confirmed</b>: ACK ${N} doesn't cover ${Math.max(p.first,N+1)}–${last(p)}. Stopping now could lose them for good (PL1).`));
+    missed.forEach(p=>lines.push(`#${p.id} (${p.first}–${last(p)}) was fully covered by ACK ${N}. Keeping it means pointless retransmissions.`));
+    partial.forEach(p=>{ if(!wrongStop.includes(p)) lines.push(`#${p.id} is only partly covered (${p.first}–${N} yes, ${N+1}–${last(p)} no). Keep it until the rest is ACKed.`); });
+    if(N<s.highestAck) lines.push(`ACK ${N} is older than one you already saw (${s.highestAck}). Reordered ACKs are normal. Never move your confirmed point backwards.`);
+    let cls='good', title=`Read ACK ${N} correctly`;
+    if(wrongStop.length){ cls='bad'; title='You stopped retransmitting unconfirmed data'; s.score-=30; s.stats.ackMistakes++; }
+    else if(missed.length){ cls='warn'; title='You missed confirmed packets'; s.score-=5; s.stats.ackMistakes++; }
+    else s.score+=10;
+    if(!lines.length) lines.push(cand.length?`Exactly the packets whose last message ≤ ${N}.`:`Nothing outstanding.`);
+    s.highestAck=Math.max(s.highestAck,N);
+    cand.forEach(p=>{ if(last(p)<=s.highestAck) p.confirmed=true; });
+    feed(`ACK ${N} received`, 't-acc');
+    s.pendingAcks=[]; s.phase='act'; s.feedback={cls,title,lines};
+    if(s.nextSeq>M && unconfirmed().length===0) s.phase='over';
+    render();
+  }
+
+  function msgStrip(){
+    let h='';
+    for(let m=1;m<=M;m++){
+      const p=s.packets.find(x=>m>=x.first&&m<=last(x));
+      const cls=!p?'':p.confirmed?'got':'fly';
+      h+=`<span class="cell ${cls}">${m}</span>`;
+    }
+    return `<div class="cells">${h}</div><div class="legend"><span><i style="background:var(--sunk);border:1px solid var(--line)"></i>not sent</span><span><i style="background:var(--accent)"></i>sent, unconfirmed</span><span><i style="background:var(--good)"></i>confirmed by ACK</span></div>`;
+  }
+  function composeHTML(){
+    const left=M-s.nextSeq+1;
+    if(left<=0) return `<div class="panel"><h3>All 20 messages sent</h3><p class="muted">Now get them confirmed: watch the ACKs and retransmit on timeout.</p></div>`;
+    const k=Math.min(s.k,left);
+    const draftSeq=s.seqDraft===''?null:Number(s.seqDraft);
+    const pays=[...Array(k)].map((_,i)=>(draftSeq===null?s.nextSeq:draftSeq)+i);
+    let ks=''; for(let i=1;i<=Math.min(MAXK,left);i++) ks+=`<button data-k="${i}" aria-pressed="${i===k}" class="${i===k?'primary':''}" style="padding:6px 10px;min-width:36px">${i}</button>`;
+    return `<div class="panel">
+      <div><span class="eyebrow">Compose</span><h3>New DATA packet to process ${PEER}</h3></div>
+      <div class="row"><span class="muted" style="font-size:13px">messages in this packet (k):</span>${ks}</div>
+      <div id="sPrev">${stripHTML({type:0,sender:ME,seq:draftSeq,payloads:pays})}</div>
+      <div class="row"><label for="seqIn" class="mono">header seq =</label><input type="number" id="seqIn" min="1" value="${esc(s.seqDraft)}"><button class="primary" id="sendGo">sendto()</button></div>
+    </div>`;
+  }
+  function flightHTML(){
+    const u=unconfirmed();
+    if(!u.length) return `<div class="panel"><h3>Unconfirmed packets</h3><p class="muted">None. Everything you've sent is covered by an ACK.</p></div>`;
+    return `<div class="panel"><h3>Unconfirmed packets <span class="muted" style="font-weight:400;font-size:13px">· timeout = ${TIMEOUT} ticks</span></h3>
+      <div class="tbl-wrap"><table><thead><tr><th>#</th><th>messages</th><th>sent</th><th>age</th><th>status</th><th></th></tr></thead><tbody>
+      ${u.map(p=>{ const age=s.tick-p.lastSent, to=age>=TIMEOUT;
+        return `<tr class="${to?'timeout':''}"><td class="num">${p.id}</td><td class="num">${p.first}–${last(p)}</td><td class="num">${p.sends}×</td><td class="num">${age}</td>
+        <td>${to?'<span class="tag t-warn">timed out</span>':'<span class="tag t-acc">waiting</span>'}</td>
+        <td><button data-rx="${p.id}" ${p.lastSent===s.tick?'disabled':''} style="padding:5px 10px">Retransmit</button></td></tr>`; }).join('')}
+      </tbody></table></div></div>`;
+  }
+  function ackReadHTML(){
+    const N=Math.max(...s.pendingAcks), cand=unconfirmed();
+    return `<div class="panel pop">
+      <div><span class="eyebrow">Tick ${s.tick} · incoming</span><h2>ACK${s.pendingAcks.length>1?'s':''} from process ${PEER}</h2></div>
+      ${s.pendingAcks.map(v=>stripHTML({type:1,sender:PEER,seq:v})).join('')}
+      <p>Which unconfirmed packets can you <b>stop retransmitting</b> now?</p>
+      <div class="checks">${cand.length?cand.map(p=>`<label><input type="checkbox" data-sel="${p.id}" ${s.ackSel[p.id]?'checked':''}> packet #${p.id}: messages ${p.first}–${last(p)}</label>`).join(''):'<span class="muted">Nothing outstanding.</span>'}</div>
+      <div class="row"><button class="primary" id="ackRead">Confirm</button></div>
+    </div>`;
+  }
+  function overHTML(){
+    const st=s.stats, min=Math.ceil(M/MAXK);
+    return `<div class="panel pop">
+      <div><span class="eyebrow">Round over · tick ${s.tick}</span><h2>All ${M} messages confirmed</h2></div>
+      <div class="big-result">
+        <div class="verdict"><span class="eyebrow">Packets sent</span><span class="v">${st.sent}</span><span class="muted" style="font-size:13px">Minimum possible with no loss: ${min}. ${st.retx} retransmissions (${st.early} early).</span></div>
+        <div class="verdict"><span class="eyebrow">Mistakes</span><span class="v ${st.ackMistakes+st.seqMistakes?'t-bad':'t-good'}">${st.ackMistakes+st.seqMistakes}</span><span class="muted" style="font-size:13px">${st.seqMistakes} bad header seq, ${st.ackMistakes} misread ACK, ${st.ignored} ignored timeouts.</span></div>
+        <div class="verdict"><span class="eyebrow">Final score</span><span class="v">${s.score}</span><span class="muted" style="font-size:13px">${s.tick} ticks to finish.</span></div>
+      </div>
+      <div class="fb warn"><b>What the network hid from you</b><ul>
+        <li><b>${st.lostData}</b> of your ${st.sent} DATA packets were lost${s.packets.filter(p=>p.lost).length?`: packet ${s.packets.filter(p=>p.lost).map(p=>`#${p.id}${p.lost>1?` (${p.lost}×)`:''}`).join(', ')}`:''}.</li>
+        <li><b>${st.lostAck}</b> ACKs from the receiver never reached you. Some of your "lost" packets had in fact arrived. You had no way to tell, so you retransmitted, and the receiver's duplicate check handled it.</li></ul></div>
+      <div class="row"><button class="primary" id="again">Play sender again</button><button id="swap">Try the receiver</button></div>
+    </div>`;
+  }
+  function render(){
+    const fb=s.feedback?`<div class="fb ${s.feedback.cls}"><b>${s.feedback.title}</b><ul>${s.feedback.lines.map(l=>`<li>${l}</li>`).join('')}</ul></div>`:'';
+    let main;
+    if(s.phase==='over') main=overHTML();
+    else if(s.phase==='ack') main=ackReadHTML();
+    else main=`${composeHTML()}${flightHTML()}
+      <div class="panel"><div class="bar"><div><span class="eyebrow">Tick ${s.tick}</span><p class="muted" style="font-size:13px">Send as many packets as you like this tick, then let time pass. Packets take 1–2 ticks, ACKs 1 tick.</p></div>
+      <button class="primary" id="tickGo">Next tick ▶</button></div></div>`;
+    const st=s.stats;
+    app.innerHTML=`<div class="game"><div class="wrap" style="gap:16px">${fb}${main}</div>
+      <aside class="side">
+        <div class="panel"><span class="eyebrow">Score</span><div class="score">${s.score}</div>
+          <div class="stats"><span>tick</span><span>${s.tick}</span><span>packets sent</span><span>${st.sent}</span><span>retransmissions</span><span>${st.retx}</span><span>highest ACK seen</span><span>${s.highestAck}</span></div></div>
+        <div class="panel"><h3>Your messages</h3>${msgStrip()}</div>
+        <div class="panel rules"><h3>Rules of the link</h3>
+          <p>Header <code>seq</code> = first message in the packet; messages are <code>seq … seq+k−1</code>.</p>
+          <p>ACK <code>N</code> means "receiver has everything ≤ N". A packet is confirmed when its <b>last</b> message ≤ N.</p>
+          <p>No ACK within ${TIMEOUT} ticks → retransmit. ACKs get lost too.</p></div>
+        <div class="panel"><h3>Event feed</h3><div class="feed">${s.events.slice(0,30).map(e=>`<div><span class="t">t${e.t}</span><span class="${e.cls}">${esc(e.msg)}</span></div>`).join('')}</div></div>
+      </aside></div>`;
+    wire();
+  }
+  function wire(){
+    const $=id=>document.getElementById(id);
+    if(s.phase==='act'){
+      app.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ s.k=Number(b.dataset.k); render(); });
+      const inp=$('seqIn');
+      if(inp){
+        inp.oninput=()=>{ s.seqDraft=inp.value; const left=M-s.nextSeq+1, k=Math.min(s.k,left), v=inp.value===''?null:Number(inp.value);
+          $('sPrev').innerHTML=stripHTML({type:0,sender:ME,seq:v,payloads:[...Array(k)].map((_,i)=>(v===null?s.nextSeq:v)+i)}); };
+        inp.onkeydown=e=>{ if(e.key==='Enter') sendNew(); };
+        $('sendGo').onclick=sendNew;
+      }
+      app.querySelectorAll('[data-rx]').forEach(b=>b.onclick=()=>retransmit(Number(b.dataset.rx)));
+      $('tickGo').onclick=nextTick;
+    } else if(s.phase==='ack'){
+      app.querySelectorAll('[data-sel]').forEach(c=>c.onchange=()=>{ s.ackSel[c.dataset.sel]=c.checked; });
+      $('ackRead').onclick=submitAckRead;
+    } else {
+      $('again').onclick=start; $('swap').onclick=()=>Receiver.start();
+    }
+  }
+  return {start};
+})();
+
+home();
+})();
+</script>
+</body>
+</html>
