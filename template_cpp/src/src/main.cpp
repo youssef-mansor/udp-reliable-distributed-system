@@ -1,13 +1,18 @@
 #include <chrono>
 #include <iostream>
 #include <string>
+#include <cstring>
 #include <thread>
 
 #include "hello.h"
 #include "config.hpp"
 #include "parser.hpp"
+#include "udp_socket.hpp"
 #include <signal.h>
-
+#include <arpa/inet.h>
+#include "packet.hpp"
+#include <cerrno>
+#include <cstdio>
 
 static void stop(int) {
   // reset signal handlers to default
@@ -93,6 +98,66 @@ int main(int argc, char **argv) {
 
 
   std::cout << "Broadcasting and delivering messages...\n\n";
+
+
+  UdpSocket sock(hosts[parser.id() - 1]);
+  if(isReceiver){
+    uint8_t buff[packet::MAX_PACKET_SIZE + 1] = {};  // +1 spare byte detects oversized packets
+
+    // receive; retry if a signal interrupted the wait
+    ssize_t packet_length = 0;
+    do {
+      packet_length = sock.receive(buff, sizeof(buff));
+    } while (packet_length < 0 && errno == EINTR);
+
+    // error or invalid size -> don't decode
+    if (packet_length < 0) {
+      perror("receive");
+    } else if (packet_length < static_cast<ssize_t>(packet::HEADER_SIZE) ||
+               packet_length > static_cast<ssize_t>(packet::MAX_PACKET_SIZE) ||
+               (static_cast<size_t>(packet_length) - packet::HEADER_SIZE) % packet::MSG_SIZE != 0) {
+      std::cerr << "Dropped malformed packet of " << packet_length << " bytes\n";
+    } else {
+      // header: decoded once per packet
+      uint8_t packet_type = buff[packet::TYPE_OFFSET];
+      uint8_t sender_id = buff[packet::SENDER_OFFSET];
+      uint32_t seq_net;
+      std::memcpy(&seq_net, buff + packet::SEQ_OFFSET, packet::SEQ_SIZE);
+      uint32_t seq = ntohl(seq_net);
+
+      if (packet_type != packet::TYPE_DATA) {
+        std::cout << "Ignored non-DATA packet (type " << +packet_type << ")\n";
+      } else {
+        // only now is the length known to be valid
+        size_t num_msgs = (static_cast<size_t>(packet_length) - packet::HEADER_SIZE) / packet::MSG_SIZE;
+        std::cout << packet_length << " bytes: DATA from " << +sender_id << ", seq " << seq
+                  << ", k=" << num_msgs << "\n";
+
+        // one payload per message; message i has seq + i
+        for (size_t i = 0; i < num_msgs; i++) {
+          uint32_t payload_net;
+          std::memcpy(&payload_net, buff + packet::PAYLOAD_OFFSET + packet::MSG_SIZE * i, packet::MSG_SIZE);
+          uint32_t payload = ntohl(payload_net);
+          std::cout << "  msg seq " << seq + i << ", payload " << payload << "\n";
+        }
+      }
+    }
+  }else{ // sender
+    uint8_t buff[packet::HEADER_SIZE + packet::MSG_SIZE] = {};
+    buff[packet::TYPE_OFFSET] = packet::TYPE_DATA; // type: DATA
+    buff[packet::SENDER_OFFSET] = static_cast<uint8_t>(parser.id()); // sender_id
+    uint32_t seq_value = 1; // 00 00 00 01
+    uint32_t seq_value_net_ordered = htonl(seq_value);
+    std::memcpy(buff + packet::SEQ_OFFSET, &seq_value_net_ordered, packet::SEQ_SIZE);
+
+    uint32_t data_value = 1; // 00 00 00 01
+    uint32_t data_value_net_ordered = htonl(data_value);
+    std::memcpy(buff + packet::PAYLOAD_OFFSET, &data_value_net_ordered, packet::MSG_SIZE);
+
+    if (sock.send(hosts[config.receiver_id-1], buff, sizeof(buff)) < 0){
+      perror("send");
+    }
+  }
 
   // After a process finishes broadcasting,
   // it waits forever for the delivery of messages.
