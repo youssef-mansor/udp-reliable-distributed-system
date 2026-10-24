@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kernel Buffer Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#EDF0EB; --surface:#FAFBF8; --sunk:#E3E8E2; --ink:#17201C; --muted:#5B665F; --line:#D2D9D3;
+  --accent:#2D47C9; --accent-ink:#FFFFFF;
+  --pkt:#2D47C9; --retx:#B7791F; --ack:#1D8577;
+  --good:#2C7A38; --bad:#BC3324; --warn:#A86C12;
+  --good-bg:#E1F0E2; --bad-bg:#F7E2DE; --warn-bg:#F6ECD8;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+    --accent:#8197FF; --accent-ink:#0C1020;
+    --pkt:#8197FF; --retx:#E2A84C; --ack:#4BC3B1;
+    --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+    --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+  --accent:#8197FF; --accent-ink:#0C1020;
+  --pkt:#8197FF; --retx:#E2A84C; --ack:#4BC3B1;
+  --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+  --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+}
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.5; padding-inline:16px; padding-block:24px 48px}
+.wrap{max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; letter-spacing:-0.01em}
+h1{font-size:clamp(28px,5vw,42px); font-weight:800; line-height:1.05}
+h2{font-size:20px; font-weight:800}
+h3{font-size:15px; font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+button{font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); padding:7px 12px}
+button:hover{border-color:var(--ink)}
+button:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+button.stop{background:var(--bad); color:var(--surface); border-color:var(--bad); font-weight:600}
+button.on{background:var(--ink); color:var(--surface); border-color:var(--ink)}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:12px}
+.row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+
+/* pipeline */
+.pipe{display:grid; grid-template-columns:150px 170px minmax(140px,1fr) 170px 150px; gap:12px; align-items:stretch}
+@media (max-width:900px){ .pipe{grid-template-columns:1fr 1fr} .pipe .wire-col{grid-column:1 / -1; order:3} .pipe .rb{order:4} .pipe .p2{order:5} }
+.proc{border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:6px; background:var(--sunk)}
+.proc .name{font-family:var(--display); font-weight:800; font-size:17px}
+.proc .call{font-family:var(--mono); font-size:12px}
+.state{font-family:var(--mono); font-size:11.5px; padding:4px 8px; border-radius:6px; border:1px solid currentColor; align-self:flex-start; line-height:1.3}
+.s-ok{color:var(--good)} .s-bad{color:var(--bad)} .s-warn{color:var(--warn)} .s-idle{color:var(--muted)}
+.kbox{border:1.5px dashed var(--line); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:8px; position:relative}
+.kbox .lab{font-family:var(--mono); font-size:11px; color:var(--muted); display:flex; justify-content:space-between}
+.kbox.full{border-color:var(--bad); border-style:solid; background:var(--bad-bg)}
+.slots{display:grid; grid-template-columns:repeat(4,1fr); gap:4px}
+.slot{height:24px; border-radius:5px; border:1px solid var(--line); background:var(--surface); font-family:var(--mono); font-size:10px; display:flex; align-items:center; justify-content:center; color:var(--accent-ink)}
+.slot.p{background:var(--pkt); border-color:var(--pkt)}
+.slot.r{background:var(--retx); border-color:var(--retx); color:#1b1405}
+.fill{height:6px; border-radius:3px; background:var(--sunk); overflow:hidden}
+.fill i{display:block; height:100%; background:var(--accent); transition:width .15s}
+.kbox.full .fill i{background:var(--bad)}
+.wire-col{display:flex; flex-direction:column; gap:6px; justify-content:center}
+.lane{position:relative; height:34px; border-radius:17px; background:var(--sunk); border:1px solid var(--line); overflow:hidden}
+.lane.ack{height:20px}
+.lane .dot{position:absolute; top:50%; width:22px; height:16px; margin-top:-8px; margin-left:-11px; border-radius:4px; background:var(--pkt); font-family:var(--mono); font-size:9px; color:var(--accent-ink); display:flex; align-items:center; justify-content:center}
+.lane .dot.r{background:var(--retx); color:#1b1405}
+.lane.ack .dot{width:10px; height:10px; margin-top:-5px; margin-left:-5px; border-radius:50%; background:var(--ack)}
+.lane-lab{font-family:var(--mono); font-size:10.5px; color:var(--muted); display:flex; justify-content:space-between}
+.drops{position:absolute; right:6px; top:-10px; display:flex; flex-direction:column; align-items:flex-end; gap:2px; pointer-events:none}
+.drops span{font-family:var(--mono); font-size:11px; color:var(--bad); font-weight:600}
+
+/* lower */
+.lower{display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:18px; align-items:start}
+@media (max-width:900px){ .lower{grid-template-columns:minmax(0,1fr)} }
+.explain{border-radius:12px; padding:12px 14px; font-size:14.5px; display:flex; flex-direction:column; gap:4px}
+.explain.good{background:var(--good-bg); border:1px solid color-mix(in srgb, var(--good) 40%, transparent)}
+.explain.bad{background:var(--bad-bg); border:1px solid color-mix(in srgb, var(--bad) 45%, transparent)}
+.explain.warn{background:var(--warn-bg); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent)}
+.explain b.h{font-family:var(--display); font-size:16px}
+.ctrls{display:grid; grid-template-columns:1fr 1fr; gap:10px 18px}
+@media (max-width:520px){ .ctrls{grid-template-columns:1fr} }
+.ctrl{display:flex; flex-direction:column; gap:2px}
+.ctrl label{display:flex; justify-content:space-between; font-size:13px}
+.ctrl label output{font-family:var(--mono); font-weight:600}
+.ctrl input[type=range]{width:100%; accent-color:var(--accent)}
+.ctrl small{color:var(--muted); font-size:11.5px; line-height:1.3}
+.stats{display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px}
+.stat{background:var(--sunk); border:1px solid var(--line); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column}
+.stat b{font-family:var(--display); font-size:22px; font-variant-numeric:tabular-nums; line-height:1.1}
+.stat span{font-size:11.5px; color:var(--muted)}
+.stat.bad b{color:var(--bad)} .stat.warn b{color:var(--warn)} .stat.good b{color:var(--good)}
+.missions{display:flex; flex-direction:column; gap:8px}
+.mission{display:grid; grid-template-columns:22px 1fr; gap:10px; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--sunk)}
+.mission .chk{width:22px; height:22px; border-radius:6px; border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--surface)}
+.mission.done{border-color:color-mix(in srgb, var(--good) 50%, var(--line))}
+.mission.done .chk{background:var(--good); border-color:var(--good)}
+.mission p{font-size:13.5px} .mission small{color:var(--muted); font-size:12px; display:block; margin-top:2px}
+.scen{display:flex; flex-wrap:wrap; gap:6px}
+.scen button{font-size:13px}
+.scen button.cur{border-color:var(--accent); color:var(--accent); font-weight:600}
+.legend{display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--muted)}
+.legend i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px}
+.note{font-size:12px; color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:6px">
+    <span class="eyebrow">Inside the kernel · UDP on localhost</span>
+    <h1>Kernel Buffer Lab</h1>
+    <p class="muted" style="max-width:68ch">Process 1 calls <span style="font-family:var(--mono)">sendto()</span>, process 2 calls <span style="font-family:var(--mono)">recvfrom()</span>, and between them sit two kernel buffers. Change the rates, freeze the receiver, and see where packets wait, where they block, and where they disappear without a trace.</p>
+  </header>
+
+  <div class="panel">
+    <div class="row" style="justify-content:space-between">
+      <div class="scen" id="scen"></div>
+      <div class="row">
+        <button id="sig" class="stop">SIGSTOP process 2</button>
+        <button id="play">Pause</button>
+        <button id="stepBtn" title="Pause and advance the simulation by one step">Step +1 s</button>
+        <button id="stepSize" title="Change how much time one step advances">step size: 1 s</button>
+        <button id="spd">Speed 1×</button>
+        <button id="reset">Reset counters</button>
+      </div>
+    </div>
+
+    <div class="pipe">
+      <div class="proc p1">
+        <span class="eyebrow">user space</span>
+        <span class="name">Process 1</span>
+        <span class="call">sendto() × <span id="sRateLbl"></span>/s</span>
+        <span class="state" id="p1state">—</span>
+      </div>
+      <div class="kbox sb" id="sbBox">
+        <div class="lab"><span>kernel · send buffer</span><span id="sbCount"></span></div>
+        <div class="slots" id="sbSlots"></div>
+        <div class="fill"><i id="sbFill"></i></div>
+        <div class="lab"><span>drains at <b id="lRateLbl"></b>/s</span></div>
+      </div>
+      <div class="wire-col">
+        <div class="lane-lab"><span>DATA →</span><span>loopback (lo)</span></div>
+        <div class="lane" id="wire"></div>
+        <div class="lane ack" id="ackw"></div>
+        <div class="lane-lab"><span>loopback</span><span>← ACK</span></div>
+      </div>
+      <div class="kbox rb" id="rbBox">
+        <div class="drops" id="drops"></div>
+        <div class="lab"><span>kernel · receive buffer</span><span id="rbCount"></span></div>
+        <div class="slots" id="rbSlots"></div>
+        <div class="fill"><i id="rbFill"></i></div>
+        <div class="lab"><span>full → arriving packets dropped</span></div>
+      </div>
+      <div class="proc p2">
+        <span class="eyebrow">user space</span>
+        <span class="name">Process 2</span>
+        <span class="call">recvfrom() × <span id="rRateLbl"></span>/s</span>
+        <span class="state" id="p2state">—</span>
+      </div>
+    </div>
+    <div class="legend"><span><i style="background:var(--pkt)"></i>new packet (number = message id)</span><span><i style="background:var(--retx)"></i>retransmission</span><span><i style="background:var(--ack);border-radius:50%"></i>ACK</span><span><i style="background:var(--bad)"></i>buffer full</span></div>
+  </div>
+
+  <div class="lower">
+    <div class="wrap" style="gap:18px">
+      <div class="explain good" id="explain"></div>
+      <div class="panel">
+        <h3>Counters <span class="muted" style="font-weight:400;font-size:12px">since reset</span></h3>
+        <div class="stats" id="stats"></div>
+      </div>
+      <div class="panel">
+        <h3>Knobs</h3>
+        <div class="ctrls" id="ctrls"></div>
+        <p class="note">Each slot stands in for one datagram. A real buffer on your machine is 212,992 bytes, but the kernel charges several hundred bytes of overhead per datagram, so it holds only a few hundred small packets. ACKs are never lost in this lab.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Missions</h2>
+      <p class="muted" style="font-size:13px">Each one checks itself off when you make it happen. Use the scenario buttons as starting points, or set the knobs yourself.</p>
+      <div class="missions" id="missions"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const P = { S:8, L:30, R:12, sndCap:12, rcvCap:12, win:0 };
+const T_OUT = 2.5, DELAY = 0.7;
+const KNOBS = [
+  {k:'S', lab:'Send rate', unit:'/s', min:1, max:40, hint:'How often process 1 calls sendto().'},
+  {k:'R', lab:'Read rate', unit:'/s', min:1, max:40, hint:'How often process 2 calls recvfrom().'},
+  {k:'L', lab:'Kernel drain rate', unit:'/s', min:1, max:60, hint:'How fast the kernel moves packets out of the send buffer. On real loopback this is very fast.'},
+  {k:'win', lab:'Sender window', unit:'', min:0, max:30, hint:'Max unACKed messages in flight. 0 = no window: send as fast as possible.'},
+  {k:'sndCap', lab:'Send buffer size', unit:' slots', min:2, max:24, hint:'Datagrams the send buffer can hold.'},
+  {k:'rcvCap', lab:'Receive buffer size', unit:' slots', min:2, max:24, hint:'Datagrams the receive buffer can hold.'},
+];
+const SCEN = [
+  {id:'normal', name:'Normal', p:{S:8,L:30,R:12,sndCap:12,rcvCap:12,win:0}, stop:false},
+  {id:'rfull', name:'Receive buffer full', p:{S:20,L:40,R:6,sndCap:12,rcvCap:12,win:0}, stop:false},
+  {id:'sfull', name:'Send buffer full', p:{S:25,L:6,R:30,sndCap:10,rcvCap:12,win:0}, stop:false},
+  {id:'both', name:'Both full', p:{S:30,L:12,R:5,sndCap:10,rcvCap:10,win:0}, stop:false},
+  {id:'sigstop', name:'Receiver stopped', p:{S:8,L:30,R:12,sndCap:12,rcvCap:12,win:0}, stop:true},
+  {id:'window', name:'Window tames it', p:{S:20,L:40,R:6,sndCap:12,rcvCap:12,win:4}, stop:false},
+];
+let cur='normal';
+let s, running=true, speed=1;
+const done = {};
+
+function fresh(){
+  return { t:0, nextId:1, sb:[], wire:[], rb:[], ackw:[], pk:new Map(), retxQ:[], pending:null,
+    stopped: s?s.stopped:false, aS:0, aL:0, aR:0, blockedNow:false, windowNow:false,
+    blocked:0, drops:0, dropFx:[], delivered:new Set(), dupes:0, sentNew:0, retx:0,
+    stopFull:false, everStoppedFull:false, dropTimes:[] };
+}
+s = fresh();
+
+function unacked(){ return s.pk.size; }
+
+function step(dt){
+  s.t += dt;
+  // retransmission timers
+  s.pk.forEach((p,id)=>{ if(p.sentAt!==null && !p.acked && !p.queued && s.t-p.sentAt>T_OUT){ p.queued=true; s.retxQ.push(id); } });
+  // process 1: sendto()
+  s.blockedNow=false; s.windowNow=false;
+  s.aS += P.S*dt;
+  while(s.aS>=1){
+    let pick = s.pending;
+    if(pick && pick.kind==='retx' && !s.pk.has(pick.id)){ pick=null; s.pending=null; }
+    if(!pick){
+      while(s.retxQ.length && !s.pk.has(s.retxQ[0])) s.retxQ.shift();
+      if(s.retxQ.length) pick={kind:'retx', id:s.retxQ[0]};
+      else if(P.win===0 || unacked()<P.win) pick={kind:'new'};
+      else { s.windowNow=true; s.aS=Math.min(s.aS,1); break; }
+    }
+    if(s.sb.length < P.sndCap){
+      let id;
+      if(pick.kind==='new'){ id=s.nextId++; s.pk.set(id,{sentAt:s.t,acked:false,queued:false}); s.sentNew++; }
+      else { id=pick.id; const p=s.pk.get(id); p.sentAt=s.t; p.queued=false; if(s.retxQ[0]===id) s.retxQ.shift(); s.retx++; }
+      s.sb.push({id, r:pick.kind==='retx'});
+      s.pending=null; s.aS-=1;
+    } else { s.pending=pick; s.blockedNow=true; s.aS=Math.min(s.aS,1); break; }
+  }
+  if(s.blockedNow) s.blocked+=dt;
+  // kernel drains send buffer onto loopback
+  s.aL += P.L*dt;
+  while(s.aL>=1 && s.sb.length){ const x=s.sb.shift(); s.wire.push({...x, t0:s.t}); s.aL-=1; }
+  if(!s.sb.length) s.aL=Math.min(s.aL,1);
+  // arrivals into receive buffer
+  s.wire = s.wire.filter(w=>{ if(s.t-w.t0>=DELAY){
+      if(s.rb.length < P.rcvCap) s.rb.push({id:w.id, r:w.r});
+      else { s.drops++; s.dropFx.push({t:s.t,id:w.id}); s.dropTimes.push(s.t); }
+      return false; } return true; });
+  // process 2: recvfrom()
+  if(!s.stopped){
+    s.aR += P.R*dt;
+    while(s.aR>=1 && s.rb.length){ const x=s.rb.shift();
+      if(s.delivered.has(x.id)) s.dupes++; else s.delivered.add(x.id);
+      s.ackw.push({id:x.id, t0:s.t}); s.aR-=1; }
+    if(!s.rb.length) s.aR=Math.min(s.aR,1);
+  }
+  // ACKs reach process 1
+  s.ackw = s.ackw.filter(a=>{ if(s.t-a.t0>=DELAY){ s.pk.delete(a.id); return false; } return true; });
+  s.dropFx = s.dropFx.filter(d=>s.t-d.t<1.2);
+  s.dropTimes = s.dropTimes.filter(t=>s.t-t<2);
+  if(s.stopped && s.rb.length>=P.rcvCap) s.stopFull=true;
+}
+
+/* ---------- rendering ---------- */
+function slotsHTML(buf, cap){
+  let h=''; for(let i=0;i<cap;i++){ const x=buf[i]; h+= x?`<span class="slot ${x.r?'r':'p'}">${x.id}</span>`:'<span class="slot"></span>'; } return h;
+}
+function lane(el, items, ack){
+  el.innerHTML = items.map(x=>{ const f=Math.min(1,(s.t-x.t0)/DELAY); const left= ack? (100-f*100) : f*100;
+    return ack? `<span class="dot" style="left:${left}%"></span>` : `<span class="dot ${x.r?'r':''}" style="left:${left}%">${x.id}</span>`; }).join('');
+}
+function setState(el, txt, cls){ el.textContent=txt; el.className='state '+cls; }
+
+function explain(){
+  const sbFull = s.sb.length>=P.sndCap, rbFull = s.rb.length>=P.rcvCap, dropping = s.dropTimes.length>0;
+  if(s.stopped) return {cls:'bad', h:'Process 2 is frozen (SIGSTOP)', b:`Nobody calls recvfrom(), so the receive buffer only fills. ${rbFull?'It is full now, so every arriving datagram is <b>dropped silently</b>. Process 1 is not told and keeps sending.':'Once it fills up, every new arrival will be dropped.'} ${s.retx?'Process 1\'s timers fire too: it retransmits copies of packets that may be sitting safely in the buffer. After SIGCONT, process 2 will read <b>duplicates</b>.':''}`};
+  if(sbFull && (rbFull||dropping)) return {cls:'bad', h:'Both buffers are full', b:'Process 1 is <b>blocked in sendto()</b>: its own send buffer has no room. Further down, the receive buffer is full too, so what does get through is <b>dropped</b>. The slowest stage, process 2\'s read rate, sets the pace. Everything faster than it is wasted or waiting.'};
+  if(rbFull || dropping) return {cls:'bad', h:'Receive buffer full: silent drops', b:'Packets arrive faster than process 2 reads them. When the receive buffer is full, the kernel <b>discards new datagrams without telling anyone</b>. To process 1 this is indistinguishable from network loss, so it times out and retransmits, adding even more traffic. Try a <b>sender window</b>.'};
+  if(s.blockedNow || sbFull) return {cls:'warn', h:'Send buffer full: sendto() blocks', b:'Process 1 produces faster than its own kernel can push packets out. <b>sendto() blocks</b> (the process sleeps) until a slot frees up. <b>Nothing is lost here</b>: this is local back-pressure, and it never depends on the receiver.'};
+  if(s.windowNow) return {cls:'good', h:'The window is holding the sender back', b:`Process 1 already has ${P.win} unACKed messages in flight, so it waits for ACKs before sending more. The sender adapts to the receiver's pace, the buffers stay short, and nothing is dropped.`};
+  return {cls:'good', h:'Normal flow', b:'Every stage keeps up. sendto() copies each datagram into the send buffer and returns immediately. The kernel moves it across loopback into the receive buffer, where it waits until process 2 calls recvfrom(). The receiver never makes the sender wait.'};
+}
+
+const MISSIONS = [
+  {id:'m1', t:'Normal flow: deliver 40 messages with zero drops.', h:'Scenario: Normal', ok:()=>s.delivered.size>=40 && s.drops===0},
+  {id:'m2', t:'Overflow the receive buffer: cause 10 silent drops.', h:'Send faster than process 2 reads.', ok:()=>s.drops>=10},
+  {id:'m3', t:'Make sendto() block for 3 seconds in total.', h:'Send faster than the kernel drain rate.', ok:()=>s.blocked>=3},
+  {id:'m4', t:'SIGSTOP process 2 until its receive buffer is full, then SIGCONT it.', h:'Watch what happens to arrivals while it\'s frozen.', ok:()=>s.everStoppedFull},
+  {id:'m5', t:'Catch a duplicate: process 2 reads a copy of a message it already delivered.', h:'Freeze the receiver longer than the 2.5 s retransmission timeout.', ok:()=>s.dupes>=1},
+  {id:'m6', t:'Tame a slow receiver: read rate ≤ 6/s, send rate ≥ 15/s, deliver 60 messages with zero drops since reset.', h:'The knob that limits messages in flight.', ok:()=>P.R<=6 && P.S>=15 && s.drops===0 && s.delivered.size>=60},
+];
+
+function render(){
+  $('sRateLbl').textContent=P.S; $('rRateLbl').textContent=P.R; $('lRateLbl').textContent=P.L;
+  $('sbSlots').innerHTML=slotsHTML(s.sb,P.sndCap); $('rbSlots').innerHTML=slotsHTML(s.rb,P.rcvCap);
+  $('sbCount').textContent=`${s.sb.length}/${P.sndCap}`; $('rbCount').textContent=`${s.rb.length}/${P.rcvCap}`;
+  $('sbFill').style.width=(100*s.sb.length/P.sndCap)+'%'; $('rbFill').style.width=(100*s.rb.length/P.rcvCap)+'%';
+  $('sbBox').classList.toggle('full', s.sb.length>=P.sndCap); $('rbBox').classList.toggle('full', s.rb.length>=P.rcvCap);
+  lane($('wire'), s.wire, false); lane($('ackw'), s.ackw, true);
+  $('drops').innerHTML=s.dropFx.slice(-4).map(d=>`<span style="opacity:${1-(s.t-d.t)/1.2}">✕ #${d.id} dropped</span>`).join('');
+  // process states
+  if(s.blockedNow) setState($('p1state'),'BLOCKED in sendto(): send buffer full','s-warn');
+  else if(s.windowNow) setState($('p1state'),`waiting: window full (${P.win} unACKed)`,'s-idle');
+  else setState($('p1state'),'sendto() returns immediately','s-ok');
+  if(s.stopped) setState($('p2state'),'SIGSTOPPED: not reading','s-bad');
+  else if(!s.rb.length) setState($('p2state'),'asleep in recvfrom(): buffer empty','s-idle');
+  else setState($('p2state'),'reading','s-ok');
+  const e=explain(); const ex=$('explain'); ex.className='explain '+e.cls; ex.innerHTML=`<b class="h">${e.h}</b><span>${e.b}</span>`;
+  const st=[
+    ['sent (new)', s.sentNew,''], ['retransmitted', s.retx, s.retx?'warn':''], ['dropped at receiver', s.drops, s.drops?'bad':''],
+    ['delivered (unique)', s.delivered.size,'good'], ['duplicates read', s.dupes, s.dupes?'warn':''], ['sendto() blocked', s.blocked.toFixed(1)+' s', s.blocked>0.05?'warn':''],
+    ['unACKed in flight', unacked(), ''], ['time', s.t.toFixed(0)+' s','']];
+  $('stats').innerHTML=st.map(([l,v,c])=>`<div class="stat ${c}"><b>${v}</b><span>${l}</span></div>`).join('');
+  MISSIONS.forEach(m=>{ if(!done[m.id] && m.ok()) done[m.id]=true; });
+  $('missions').innerHTML=MISSIONS.map(m=>`<div class="mission ${done[m.id]?'done':''}"><span class="chk">${done[m.id]?'✓':''}</span><div><p>${m.t}</p><small>${done[m.id]?'Done.':'Hint: '+m.h}</small></div></div>`).join('');
+  $('sig').textContent = s.stopped?'SIGCONT process 2':'SIGSTOP process 2';
+  $('sig').className = s.stopped?'primary':'stop';
+}
+
+/* ---------- controls ---------- */
+function buildCtrls(){
+  $('ctrls').innerHTML=KNOBS.map(k=>`<div class="ctrl"><label for="k_${k.k}">${k.lab}<output id="o_${k.k}"></output></label>
+    <input type="range" id="k_${k.k}" min="${k.min}" max="${k.max}" value="${P[k.k]}"><small>${k.hint}</small></div>`).join('');
+  KNOBS.forEach(k=>{ const el=$('k_'+k.k); const show=()=>{ $('o_'+k.k).textContent = (k.k==='win'&&P.win===0)?'off':P[k.k]+k.unit; };
+    show(); el.oninput=()=>{ P[k.k]=Number(el.value); show(); cur=null; buildScen();
+      if(k.k==='sndCap'&&s.sb.length>P.sndCap) s.sb.length=P.sndCap; if(k.k==='rcvCap'&&s.rb.length>P.rcvCap){ s.drops+=s.rb.length-P.rcvCap; s.rb.length=P.rcvCap; } }; });
+}
+function syncCtrls(){ KNOBS.forEach(k=>{ $('k_'+k.k).value=P[k.k]; $('o_'+k.k).textContent=(k.k==='win'&&P.win===0)?'off':P[k.k]+k.unit; }); }
+function buildScen(){
+  $('scen').innerHTML=SCEN.map(c=>`<button data-sc="${c.id}" class="${cur===c.id?'cur':''}">${c.name}</button>`).join('');
+  $('scen').querySelectorAll('button').forEach(b=>b.onclick=()=>{ const c=SCEN.find(x=>x.id===b.dataset.sc); Object.assign(P,c.p); cur=c.id; s=fresh(); s.stopped=c.stop; syncCtrls(); buildScen(); });
+}
+$('sig').onclick=()=>{ if(s.stopped && s.stopFull) s.everStoppedFull=true; s.stopped=!s.stopped; s.stopFull=false; };
+$('play').onclick=()=>{ running=!running; $('play').textContent=running?'Pause':'Play'; };
+let stepSize=1;
+$('stepBtn').onclick=()=>{
+  running=false; $('play').textContent='Play';
+  let sim=stepSize; while(sim>1e-9){ const d=Math.min(0.02,sim); step(d); sim-=d; }
+};
+$('stepSize').onclick=()=>{
+  stepSize = stepSize===1?0.1:stepSize===0.1?0.5:1;
+  $('stepSize').textContent=`step size: ${stepSize} s`; $('stepBtn').textContent=`Step +${stepSize} s`;
+};
+$('spd').onclick=()=>{ speed = speed===1?2:speed===2?0.5:1; $('spd').textContent=`Speed ${speed}×`; };
+$('reset').onclick=()=>{ const st=s.stopped; s=fresh(); s.stopped=st; };
+
+buildCtrls(); buildScen();
+const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let last=performance.now();
+function frame(now){
+  let dt=Math.min(0.1,(now-last)/1000); last=now;
+  if(running){ let sim=dt*speed*(reduced?0.6:1); while(sim>0){ const d=Math.min(0.02,sim); step(d); sim-=d; } }
+  render(); requestAnimationFrame(frame);
+}
+render(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
