@@ -6,7 +6,7 @@
 #include <cerrno>
 #include <stdexcept>
 #include <string>
-
+#include <poll.h>
 
 namespace {
 sockaddr_in toSockaddr(const Parser::Host &host) {
@@ -22,7 +22,7 @@ sockaddr_in toSockaddr(const Parser::Host &host) {
 }
 
 UdpSocket::UdpSocket(const Parser::Host &self)
-    : fd_{socket(AF_INET, SOCK_DGRAM, 0)}
+    : fd_{socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0)}
 {
   if (fd_ < 0) {
     throw std::runtime_error(std::string("socket() failed: ") + std::strerror(errno));
@@ -50,4 +50,12 @@ ssize_t UdpSocket::send(const Parser::Host &dest, const uint8_t * buf, size_t le
 
 ssize_t UdpSocket::receive(uint8_t * buf, size_t cap){
   return recvfrom(fd_, buf, cap, 0, nullptr, nullptr);
+}
+
+int UdpSocket::waitReadable(int timeout_ms){
+  pollfd pfd{};
+  pfd.fd = fd_;
+  pfd.events = POLLIN;
+
+  return poll(&pfd, 1, timeout_ms);
 }

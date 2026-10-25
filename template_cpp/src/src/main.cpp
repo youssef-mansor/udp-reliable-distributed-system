@@ -106,6 +106,7 @@ int main(int argc, char **argv) {
 
     // receive; retry if a signal interrupted the wait
     ssize_t packet_length = 0;
+    sock.waitReadable(-1);
     do {
       packet_length = sock.receive(buff, sizeof(buff));
     } while (packet_length < 0 && errno == EINTR);
