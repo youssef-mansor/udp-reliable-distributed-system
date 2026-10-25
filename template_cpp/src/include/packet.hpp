@@ -28,5 +28,16 @@ size_t encodeData(uint8_t* buf, uint8_t sender_id, uint32_t first_seq, const uin
 
 // buf must hold at least HEADER_SIZE bytes; returns HEADER_SIZE
 size_t encodeAck(uint8_t* buf, uint8_t sender_id, uint32_t cumulative_seq);
+
+struct Decoded {
+  uint8_t  type;
+  uint8_t  sender_id;
+  uint32_t seq;                              // DATA: first message's seq; ACK: cumulative seq
+  size_t   n;                                // number of messages (0 for an ACK)
+  uint32_t payloads[MAX_MSGS_PER_PACKET];    // only the first n are valid
+};
+
+// returns false if the packet is malformed; out is only valid when true
+bool decode(const uint8_t* buf, size_t len, Decoded& out);
 }
 

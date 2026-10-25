@@ -33,3 +33,39 @@ size_t packet::encodeAck(uint8_t* buf, uint8_t sender_id, uint32_t cumulative_se
     writeHeader(buf, packet::TYPE_ACK, sender_id, cumulative_seq);
     return packet::HEADER_SIZE;
 }
+
+bool packet::decode(const uint8_t* buf, size_t len, Decoded& out)
+{
+    if (len < packet::HEADER_SIZE) {
+        return false;
+    }
+
+    out.type = buf[packet::TYPE_OFFSET];
+    out.sender_id = buf[packet::SENDER_OFFSET];
+    uint32_t seq_net;
+    std::memcpy(&seq_net, buf + packet::SEQ_OFFSET, packet::SEQ_SIZE);
+    out.seq = ntohl(seq_net);
+
+    if (out.type == packet::TYPE_ACK) {
+        out.n = 0;
+        return len == packet::HEADER_SIZE;
+    }
+    if (out.type != packet::TYPE_DATA) {
+        return false;
+    }
+
+    // data: whole payloads only, 1 to MAX_MSGS_PER_PACKET of them
+    if (len > packet::MAX_PACKET_SIZE || (len - packet::HEADER_SIZE) % packet::MSG_SIZE != 0) {
+        return false;
+    }
+    out.n = (len - packet::HEADER_SIZE) / packet::MSG_SIZE;
+    if (out.n == 0) {
+        return false;
+    }
+    for (size_t i = 0; i < out.n; i++) {
+        uint32_t payload_net;
+        std::memcpy(&payload_net, buf + packet::PAYLOAD_OFFSET + packet::MSG_SIZE * i, packet::MSG_SIZE);
+        out.payloads[i] = ntohl(payload_net);
+    }
+    return true;
+}

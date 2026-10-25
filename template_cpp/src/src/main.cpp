@@ -1,7 +1,6 @@
 #include <chrono>
 #include <iostream>
 #include <string>
-#include <cstring>
 #include <thread>
 
 #include "hello.h"
@@ -9,7 +8,6 @@
 #include "parser.hpp"
 #include "udp_socket.hpp"
 #include <signal.h>
-#include <arpa/inet.h>
 #include "packet.hpp"
 #include <cerrno>
 #include <cstdio>
@@ -114,36 +112,21 @@ int main(int argc, char **argv) {
       packet_length = sock.receive(buff, sizeof(buff));
     } while (packet_length < 0 && errno == EINTR);
 
-    // error or invalid size -> don't decode
+    packet::Decoded pkt;
     if (packet_length < 0) {
       perror("receive");
-    } else if (packet_length < static_cast<ssize_t>(packet::HEADER_SIZE) ||
-               packet_length > static_cast<ssize_t>(packet::MAX_PACKET_SIZE) ||
-               (static_cast<size_t>(packet_length) - packet::HEADER_SIZE) % packet::MSG_SIZE != 0) {
+    } else if (!packet::decode(buff, static_cast<size_t>(packet_length), pkt)) {
       std::cerr << "Dropped malformed packet of " << packet_length << " bytes\n";
+    } else if (pkt.sender_id < 1 || pkt.sender_id > hosts.size()) {
+      std::cerr << "Dropped packet from unknown sender " << +pkt.sender_id << "\n";
+    } else if (pkt.type != packet::TYPE_DATA) {
+      std::cout << "Ignored non-DATA packet (type " << +pkt.type << ")\n";
     } else {
-      // header: decoded once per packet
-      uint8_t packet_type = buff[packet::TYPE_OFFSET];
-      uint8_t sender_id = buff[packet::SENDER_OFFSET];
-      uint32_t seq_net;
-      std::memcpy(&seq_net, buff + packet::SEQ_OFFSET, packet::SEQ_SIZE);
-      uint32_t seq = ntohl(seq_net);
-
-      if (packet_type != packet::TYPE_DATA) {
-        std::cout << "Ignored non-DATA packet (type " << +packet_type << ")\n";
-      } else {
-        // only now is the length known to be valid
-        size_t num_msgs = (static_cast<size_t>(packet_length) - packet::HEADER_SIZE) / packet::MSG_SIZE;
-        std::cout << packet_length << " bytes: DATA from " << +sender_id << ", seq " << seq
-                  << ", k=" << num_msgs << "\n";
-
-        // one payload per message; message i has seq + i
-        for (size_t i = 0; i < num_msgs; i++) {
-          uint32_t payload_net;
-          std::memcpy(&payload_net, buff + packet::PAYLOAD_OFFSET + packet::MSG_SIZE * i, packet::MSG_SIZE);
-          uint32_t payload = ntohl(payload_net);
-          std::cout << "  msg seq " << seq + i << ", payload " << payload << "\n";
-        }
+      std::cout << packet_length << " bytes: DATA from " << +pkt.sender_id << ", seq " << pkt.seq
+                << ", k=" << pkt.n << "\n";
+      // message i has seq + i
+      for (size_t i = 0; i < pkt.n; i++) {
+        std::cout << "  msg seq " << pkt.seq + i << ", payload " << pkt.payloads[i] << "\n";
       }
     }
   }else{ // sender
