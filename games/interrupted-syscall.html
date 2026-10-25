@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interrupted Syscall</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#EDF0EB; --surface:#FAFBF8; --sunk:#E3E8E2; --ink:#17201C; --muted:#5B665F; --line:#D2D9D3;
+  --accent:#2D47C9; --accent-ink:#FFFFFF;
+  --world:#8A3D8E; --user:#2D47C9; --kernel:#1D8577;
+  --good:#2C7A38; --bad:#BC3324; --warn:#A86C12;
+  --good-bg:#E1F0E2; --bad-bg:#F7E2DE; --warn-bg:#F6ECD8; --hl:#FFF1C2;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+    --accent:#8197FF; --accent-ink:#0C1020;
+    --world:#CB80CF; --user:#8197FF; --kernel:#4BC3B1;
+    --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+    --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212; --hl:#3A3115;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+  --accent:#8197FF; --accent-ink:#0C1020;
+  --world:#CB80CF; --user:#8197FF; --kernel:#4BC3B1;
+  --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+  --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212; --hl:#3A3115;
+}
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.5; padding-inline:16px; padding-block:24px 48px}
+.wrap{max-width:1120px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; letter-spacing:-0.01em}
+h1{font-size:clamp(28px,5vw,42px); font-weight:800; line-height:1.05}
+h2{font-size:20px; font-weight:800}
+h3{font-size:15px; font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+button{font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); padding:8px 13px}
+button:hover:not(:disabled){border-color:var(--ink)}
+button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button:disabled{opacity:.45; cursor:not-allowed}
+button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:12px}
+.row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.tabs{display:flex; flex-wrap:wrap; gap:6px}
+.tabs button{font-size:13px; padding:6px 11px}
+.tabs button.cur{border-color:var(--accent); color:var(--accent); font-weight:600}
+.tabs button.won::after{content:" ✓"; color:var(--good)}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{font-family:var(--mono); font-size:12px; padding:3px 9px; border-radius:99px; border:1px solid var(--line); background:var(--sunk)}
+.chip b{font-weight:600}
+.setup{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px}
+.opt{display:flex; flex-direction:column; gap:4px}
+.opt .lab{font-size:12px; color:var(--muted)}
+.seg{display:inline-flex; flex-wrap:wrap; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+.seg button{border:0; border-radius:0; padding:6px 10px; font-size:13px; font-family:var(--mono)}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink); color:var(--surface)}
+.guess{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px}
+.guess button{text-align:left; padding:12px; display:flex; flex-direction:column; gap:3px; border-radius:12px}
+.guess button b{font-family:var(--display); font-size:16px}
+.guess button span{font-size:12.5px; color:var(--muted)}
+.guess button.right{border-color:var(--good); background:var(--good-bg)}
+.guess button.wrong{border-color:var(--bad); background:var(--bad-bg)}
+.stage{display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:18px; align-items:start}
+@media (max-width:880px){ .stage{grid-template-columns:minmax(0,1fr)} }
+.lanes{display:flex; flex-direction:column; gap:8px}
+.lane{display:grid; grid-template-columns:118px 1fr; gap:10px; align-items:stretch}
+.lane .who{font-family:var(--mono); font-size:11.5px; font-weight:600; padding:8px; border-radius:8px; color:var(--surface); display:flex; align-items:center}
+.lane.world .who{background:var(--world)} .lane.user .who{background:var(--user)} .lane.kernel .who{background:var(--kernel)}
+.lane .box{border:1px solid var(--line); border-radius:8px; padding:8px 10px; background:var(--sunk); font-size:13.5px; min-height:40px; display:flex; align-items:center}
+.lane.active .box{border-color:currentColor; background:var(--hl)}
+.lane.world.active .box{color:var(--ink); border-color:var(--world)} .lane.user.active .box{border-color:var(--user)} .lane.kernel.active .box{border-color:var(--kernel)}
+.pstate{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.badge{font-family:var(--mono); font-size:12.5px; font-weight:600; padding:5px 10px; border-radius:8px; border:1.5px solid currentColor}
+.b-run{color:var(--good)} .b-sleep{color:var(--accent)} .b-frozen{color:var(--warn)} .b-dead{color:var(--bad)} .b-handler{color:var(--world)}
+.code{font-family:var(--mono); font-size:12.5px; background:var(--sunk); border:1px solid var(--line); border-radius:10px; padding:8px 0; overflow-x:auto}
+.code div{white-space:pre; padding:1px 12px; border-left:3px solid transparent}
+.code div.on{background:var(--hl); border-left-color:var(--accent)}
+.code .c{color:var(--muted)}
+.code-title{font-family:var(--mono); font-size:11px; color:var(--muted)}
+.log{display:flex; flex-direction:column; gap:4px; font-size:13px; max-height:240px; overflow:auto}
+.log div{display:grid; grid-template-columns:28px 64px 1fr; gap:6px}
+.log .n{font-family:var(--mono); color:var(--muted)}
+.log .w{font-family:var(--mono); font-size:11px; font-weight:600}
+.w-world{color:var(--world)} .w-user{color:var(--user)} .w-kernel{color:var(--kernel)}
+.verdict{border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:6px; font-size:14px}
+.verdict.good{background:var(--good-bg); border:1px solid color-mix(in srgb, var(--good) 40%, transparent)}
+.verdict.bad{background:var(--bad-bg); border:1px solid color-mix(in srgb, var(--bad) 45%, transparent)}
+.verdict.warn{background:var(--warn-bg); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent)}
+.verdict b.h{font-family:var(--display); font-size:16px}
+.score{font-family:var(--display); font-weight:800; font-size:28px; font-variant-numeric:tabular-nums}
+.legend{font-size:12.5px; color:var(--muted)}
+.ref{font-size:13px; display:flex; flex-direction:column; gap:6px}
+.ref table{border-collapse:collapse; width:100%; font-size:12.5px}
+.ref th,.ref td{text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top}
+.ref th{font-family:var(--mono); font-size:11px; color:var(--muted); font-weight:400; text-transform:uppercase; letter-spacing:.05em}
+.tbl{overflow-x:auto}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:6px">
+    <span class="eyebrow">Signals × blocking system calls</span>
+    <h1>Interrupted Syscall</h1>
+    <p class="muted" style="max-width:68ch">Process 2 is asleep inside <span class="mono">recvfrom()</span>. A signal arrives. Does the process die, does the kernel quietly restart the call, or does your code get <span class="mono">-1</span> with <span class="mono">errno = EINTR</span>? Predict first, then step through what really happens.</p>
+  </header>
+
+  <div class="panel">
+    <div class="row" style="justify-content:space-between">
+      <div class="tabs" id="tabs"></div>
+      <div class="row"><span class="eyebrow">score</span><span class="score" id="score">0</span></div>
+    </div>
+    <div id="scenario"></div>
+  </div>
+
+  <div class="panel" id="guessPanel">
+    <h2>Your prediction</h2>
+    <div class="guess" id="guess"></div>
+  </div>
+
+  <div class="stage" id="stage" hidden>
+    <div class="wrap" style="gap:16px">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <div class="pstate"><span class="eyebrow">process 2</span><span class="badge" id="pbadge">—</span></div>
+          <div class="row"><button id="next" class="primary">Next step</button><button id="all">Show all</button></div>
+        </div>
+        <div class="lanes">
+          <div class="lane world" id="Lworld"><span class="who">outside world</span><div class="box" id="Bworld"></div></div>
+          <div class="lane user" id="Luser"><span class="who">user space</span><div class="box" id="Buser"></div></div>
+          <div class="lane kernel" id="Lkernel"><span class="who">kernel</span><div class="box" id="Bkernel"></div></div>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+      <div id="verdict"></div>
+    </div>
+    <div class="wrap" style="gap:16px">
+      <div class="panel"><span class="code-title" id="mainTitle">main.cpp: the receive loop</span><div class="code" id="codeMain"></div></div>
+      <div class="panel"><span class="code-title">signal handler</span><div class="code" id="codeHandler"></div></div>
+    </div>
+  </div>
+
+  <div class="panel ref">
+    <h3>The rules this game is built on (Linux, <span class="mono">man 7 signal</span>)</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>situation</th><th>what the blocked call does</th></tr></thead>
+      <tbody>
+        <tr><td>handler calls <span class="mono">exit()</span></td><td>never returns: the process ends inside the handler</td></tr>
+        <tr><td>handler returns, <span class="mono">SA_RESTART</span> set, plain blocking <span class="mono">recvfrom</span></td><td>restarted by the kernel; your code never notices</td></tr>
+        <tr><td>handler returns, no <span class="mono">SA_RESTART</span></td><td>returns <span class="mono">-1</span>, <span class="mono">errno = EINTR</span></td></tr>
+        <tr><td>handler returns, socket has a receive timeout (<span class="mono">SO_RCVTIMEO</span>)</td><td>EINTR, even with <span class="mono">SA_RESTART</span></td></tr>
+        <tr><td>handler returns, call is <span class="mono">poll()</span></td><td>EINTR, always: <span class="mono">poll</span> is never restarted after a handler</td></tr>
+        <tr><td>SIGSTOP then SIGCONT, no handler</td><td>frozen, then keeps waiting, except a socket with <span class="mono">SO_RCVTIMEO</span>, which returns EINTR</td></tr>
+      </tbody></table></div>
+    <p class="muted" style="font-size:12.5px">The template's <span class="mono">signal()</span> on glibc installs handlers with <span class="mono">SA_RESTART</span>. "Restart" means the call starts over from scratch, which is safe for UDP: a datagram is received whole or not at all.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const SIGS={TERM:'SIGTERM', INT:'SIGINT', STOPCONT:'SIGSTOP → SIGCONT'};
+const OUT={
+  dies:{t:'Process dies in the handler', d:'recvfrom() never returns to your code.'},
+  restart:{t:'Kernel restarts the call', d:'Your code never notices anything happened.'},
+  eintr:{t:'Returns -1, errno = EINTR', d:'Your code sees the interruption and must decide.'},
+  frozen:{t:'Frozen, then keeps waiting', d:'No handler runs; after SIGCONT the kernel silently re-checks the buffer and waits again if empty.'},
+};
+const STORY=[
+  {name:'The template today', sig:'TERM', handler:'exit', restart:true, timeout:false, call:'recvfrom',
+   blurb:'Exactly your current code: the template\'s stop() calls exit(0), and stress.py crashes process 2 with SIGTERM.'},
+  {name:'stress.py pauses it', sig:'STOPCONT', handler:'exit', restart:true, timeout:false, call:'recvfrom',
+   blurb:'stress.py sends SIGSTOP, waits, then SIGCONT. Your socket has no receive timeout.'},
+  {name:'Pause with a timeout', sig:'STOPCONT', handler:'exit', restart:true, timeout:true, call:'recvfrom',
+   blurb:'Same pause, but you gave the socket a receive timeout with setsockopt(SO_RCVTIMEO), e.g. to wake up for retransmissions.'},
+  {name:'Flag-style handler', sig:'TERM', handler:'flag', restart:true, timeout:false, call:'recvfrom',
+   blurb:'You changed stop() to only set stopping = 1 and return, so main can flush the log safely. signal() still uses SA_RESTART.'},
+  {name:'Flag style, no restart', sig:'TERM', handler:'flag', restart:false, timeout:false, call:'recvfrom',
+   blurb:'Same flag-style handler, but installed with sigaction() and no SA_RESTART flag.'},
+  {name:'Flag style + timeout', sig:'INT', handler:'flag', restart:true, timeout:true, call:'recvfrom',
+   blurb:'Flag-style handler, SA_RESTART on, and the socket has a receive timeout. You press Ctrl+C.'},
+  {name:'Event loop: poll()', sig:'TERM', handler:'flag', restart:true, timeout:false, call:'poll',
+   blurb:'The event-loop design: process 2 is asleep in poll(), not recvfrom. Flag-style handler, SA_RESTART on.'},
+  {name:'Event loop paused', sig:'STOPCONT', handler:'flag', restart:true, timeout:false, call:'poll',
+   blurb:'The event loop is asleep in poll() when stress.py sends SIGSTOP, then SIGCONT.'},
+];
+let mode=0;            // 0..STORY.length-1 = story, 'sandbox'
+let sand={sig:'TERM', handler:'flag', restart:true, timeout:false, call:'recvfrom'};
+let score=0; const won={};
+let st=null;           // current reveal state
+
+function cur(){ return mode==='sandbox'?sand:STORY[mode]; }
+function outcome(sc){
+  if(sc.sig==='STOPCONT'){ return (sc.call==='recvfrom' && sc.timeout)?'eintr':'frozen'; }
+  if(sc.handler==='exit') return 'dies';
+  if(sc.call==='poll') return 'eintr';
+  if(sc.timeout) return 'eintr';
+  return sc.restart?'restart':'eintr';
+}
+function why(sc,o){
+  if(o==='dies') return 'The handler runs to completion and calls exit(0). The process ends right there, so the question of restarting recvfrom never comes up. Your do/while never sees anything.';
+  if(o==='frozen') return sc.call==='poll'
+    ? 'SIGSTOP cannot be caught, so no handler runs. The kernel freezes the process, and after SIGCONT it simply continues waiting in poll(). The event loop does not even notice.'
+    : 'SIGSTOP cannot be caught, so no handler runs. After SIGCONT the kernel internally restarts recvfrom, which first re-checks the receive buffer: a packet that arrived during the freeze is returned immediately, otherwise it sleeps again. Mechanically this is a restart too; the difference from "Kernel restarts the call" is only that no handler ran and SA_RESTART plays no part. Either way your code never notices.';
+  if(o==='restart') return 'The handler returned, SA_RESTART is set, and a plain blocking recvfrom is restartable, so the kernel re-enters recvfrom from scratch. Nothing reaches your code.';
+  if(sc.sig==='STOPCONT') return 'A Linux quirk: a socket with SO_RCVTIMEO returns EINTR after a stop/continue, even though no handler ran (man 7 signal, "Interruption of system calls"). Your loop sees -1 and must cope.';
+  if(sc.call==='poll') return 'poll() is never restarted after a handler, regardless of SA_RESTART. It always returns -1 with EINTR. Your loop has to handle it.';
+  if(sc.timeout) return 'A socket with a receive timeout (SO_RCVTIMEO) is never restarted after a handler, even with SA_RESTART. recvfrom returns -1 with EINTR.';
+  return 'The handler returned, but without SA_RESTART the kernel does not restart the call. recvfrom returns -1 with errno = EINTR.';
+}
+function lesson(sc,o){
+  const flag = sc.handler==='flag' && sc.sig!=='STOPCONT';
+  if(o==='restart' && flag) return {cls:'bad', t:'Hidden bug: the process never notices it was stopped', b:'stopping = 1 is set, but recvfrom was silently restarted, so main stays asleep until the next packet arrives, and then handles it after a "crash". A flag-style handler needs a call that can wake up: no SA_RESTART, a receive timeout, or poll().'};
+  if(o==='eintr' && flag) return {cls:'warn', t:'Your current loop would be wrong here', b:'while (packet_length < 0 && errno == EINTR) retries blindly, which sends a "crashed" process back to sleep. The retry must first check the flag: if stopping, leave the loop and write the log; otherwise retry.'};
+  if(o==='eintr') return {cls:'good', t:'This is why the retry loop exists', b:'The process is alive and supposed to keep working, so retrying is exactly right. Without the loop, a harmless pause would look like a receive failure.'};
+  if(o==='dies') return {cls:'good', t:'With exit-style stop(), EINTR never reaches you', b:'That is why the retry loop is harmless today. It starts to matter once you switch to a flag-style handler or the poll() event loop.'};
+  return {cls:'good', t:'Transparent', b:'Nothing for your code to do. The retry loop is simply not exercised in this case.'};
+}
+
+/* code panels */
+const MAIN_RECV=[
+  ['ssize_t packet_length = 0;'],
+  ['do {'],
+  ['  packet_length = sock.receive(buff, sizeof(buff));  <span class="c">// recvfrom()</span>'],
+  ['} while (packet_length &lt; 0 &amp;&amp; errno == EINTR);'],
+  ['<span class="c">// decode the packet ...</span>'],
+];
+const MAIN_POLL=[
+  ['while (true) {'],
+  ['  int r = poll(&amp;pfd, 1, timeout_ms);'],
+  ['  if (r &lt; 0 &amp;&amp; errno == EINTR) {'],
+  ['    if (stopping) break;  <span class="c">// crashed: go write the log</span>'],
+  ['    continue;             <span class="c">// just a pause: wait again</span>'],
+  ['  }'],
+  ['  <span class="c">// drain the socket, handle timers ...</span>'],
+  ['}'],
+];
+const H_EXIT=[['static void stop(int) {'],['  <span class="c">// write/flush output file</span>'],['  exit(0);'],['}']];
+const H_FLAG=[['volatile sig_atomic_t stopping = 0;'],['static void stop(int) {'],['  stopping = 1;'],['}  <span class="c">// returns to the kernel</span>']];
+function codeHTML(lines,on){ return lines.map((l,i)=>`<div class="${on.includes(i)?'on':''}">${l[0]}</div>`).join(''); }
+
+/* step generation */
+function steps(sc){
+  const o=outcome(sc), S=[]; const poll=sc.call==='poll';
+  const callName=poll?'poll()':'recvfrom()';
+  const enterLine=poll?[1]:[2];
+  const push=(lane,text,state,main=[],hnd=[])=>S.push({lane,text,state,main,hnd});
+  push('user',`main calls ${poll?'poll(), waiting for the socket to become readable':'sock.receive() → recvfrom()'}`,'run',enterLine);
+  push('kernel',`No packet waiting. The kernel puts process 2 to sleep inside ${callName} (interruptible sleep).`,'sleep',enterLine);
+  if(sc.sig==='STOPCONT'){
+    push('world','stress.py runs kill -SIGSTOP on process 2','sleep',enterLine);
+    push('kernel','SIGSTOP cannot be caught or ignored. The kernel freezes process 2 (state T). No handler runs.','frozen',enterLine);
+    push('world','Some time later: kill -SIGCONT','frozen',enterLine);
+    if(o==='frozen'){
+      push('kernel',`Process 2 is thawed. The kernel restarts the wait internally: it first re-checks the receive buffer. A packet that arrived while frozen is returned right away; otherwise ${callName} sleeps again.`,'sleep',enterLine);
+      push('user','Nothing. From the program\'s point of view, no time even passed in its own code.','sleep',enterLine);
+    } else {
+      push('kernel','Thawed. The socket has SO_RCVTIMEO, so the kernel ends the wait: recvfrom returns -1, errno = EINTR.','run',enterLine);
+      push('user','packet_length = -1','run',[2]);
+      push('user','while (-1 < 0 && errno == EINTR) is true → loop again','run',[3]);
+      push('user','Back into recvfrom(), asleep again. Correct: the process is alive and should keep working.','sleep',[2]);
+    }
+    return S;
+  }
+  const sig=SIGS[sc.sig];
+  push('world',`${sc.sig==='INT'?'You press Ctrl+C':'stress.py runs kill -'+sig} → ${sig} for process 2`,'sleep',enterLine);
+  push('kernel',`The kernel marks ${sig} pending, wakes process 2 and abandons the wait in ${callName}.`,'run',enterLine);
+  if(sc.handler==='exit'){
+    push('user','The kernel diverts execution into the handler: stop() runs and writes the log.','handler',[],[1]);
+    push('user','exit(0): the process ends. recvfrom() never returns, so the while condition never runs.','dead',[],[2]);
+    return S;
+  }
+  push('user','The kernel diverts execution into the handler: stop() sets stopping = 1.','handler',[],[2]);
+  push('user','stop() returns. Control goes back into the kernel (sigreturn).','handler',[],[3]);
+  if(o==='restart'){
+    push('kernel','SA_RESTART is set and recvfrom is restartable: the kernel re-enters recvfrom from scratch.','sleep',[2]);
+    push('user','Nothing. Process 2 is asleep again. stopping is 1, but no code is running to look at it.','sleep',[2]);
+    return S;
+  }
+  const reason = poll?'poll() is never restarted after a handler':sc.timeout?'a socket with SO_RCVTIMEO is never restarted':'no SA_RESTART flag';
+  push('kernel',`Not restarted (${reason}): ${callName} returns -1, errno = EINTR.`,'run',enterLine);
+  if(poll){
+    push('user','r = -1, errno == EINTR → enter the if','run',[2]);
+    push('user','stopping is 1 → break out of the loop and go write the log. Correct crash behaviour.','run',[3]);
+  } else {
+    push('user','packet_length = -1','run',[2]);
+    push('user','while (-1 < 0 && errno == EINTR) is true → loop again','run',[3]);
+    push('user','Back into recvfrom(), asleep again, even though stopping = 1. A "crashed" process is still alive.','sleep',[2]);
+  }
+  return S;
+}
+
+/* rendering */
+const BADGE={run:['RUNNING','b-run'], sleep:['SLEEPING in the call','b-sleep'], frozen:['FROZEN (SIGSTOP)','b-frozen'], dead:['EXITED','b-dead'], handler:['RUNNING the handler','b-handler']};
+function renderTabs(){
+  $('tabs').innerHTML = STORY.map((s,i)=>`<button data-m="${i}" class="${mode===i?'cur':''} ${won[i]?'won':''}">${i+1}. ${s.name}</button>`).join('')
+    + `<button data-m="sandbox" class="${mode==='sandbox'?'cur':''}">Sandbox</button>`;
+  $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ mode=b.dataset.m==='sandbox'?'sandbox':Number(b.dataset.m); start(); });
+}
+function chip(k,v){ return `<span class="chip">${k}: <b>${v}</b></span>`; }
+function renderScenario(){
+  const sc=cur();
+  let h='';
+  if(mode==='sandbox'){
+    const seg=(key,opts,disabled)=>`<span class="seg">${opts.map(([v,l])=>`<button data-k="${key}" data-v="${v}" aria-pressed="${String(sand[key])===String(v)}" ${disabled?'disabled':''}>${l}</button>`).join('')}</span>`;
+    const stop=sand.sig==='STOPCONT';
+    h=`<div style="display:flex;flex-direction:column;gap:12px"><div><span class="eyebrow">Sandbox</span><h2>Build your own scenario</h2></div>
+      <div class="setup">
+        <div class="opt"><span class="lab">signal</span>${seg('sig',[['TERM','SIGTERM'],['INT','SIGINT'],['STOPCONT','STOP→CONT']])}</div>
+        <div class="opt"><span class="lab">blocked in</span>${seg('call',[['recvfrom','recvfrom()'],['poll','poll()']])}</div>
+        <div class="opt"><span class="lab">handler style${stop?' (no handler for STOP)':''}</span>${seg('handler',[['exit','exit(0)'],['flag','set flag, return']],stop)}</div>
+        <div class="opt"><span class="lab">SA_RESTART${stop?' (n/a)':''}</span>${seg('restart',[['true','on'],['false','off']],stop)}</div>
+        <div class="opt"><span class="lab">socket receive timeout</span>${seg('timeout',[['false','none'],['true','SO_RCVTIMEO']],sand.call==='poll')}</div>
+      </div></div>`;
+  } else {
+    h=`<div style="display:flex;flex-direction:column;gap:10px"><div><span class="eyebrow">Round ${mode+1} of ${STORY.length}</span><h2>${sc.name}</h2></div>
+      <p>${sc.blurb}</p>
+      <div class="chips">${chip('signal',SIGS[sc.sig])}${chip('blocked in',sc.call+'()')}${sc.sig==='STOPCONT'?'':chip('handler',sc.handler==='exit'?'exit(0)':'set flag, return')}${sc.sig==='STOPCONT'?'':chip('SA_RESTART',sc.restart?'on':'off')}${sc.call==='poll'?'':chip('receive timeout',sc.timeout?'SO_RCVTIMEO':'none')}</div></div>`;
+  }
+  $('scenario').innerHTML=h;
+  $('scenario').querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ const k=b.dataset.k; let v=b.dataset.v; if(v==='true')v=true; else if(v==='false')v=false; sand[k]=v; if(k==='call'&&v==='poll') sand.timeout=false; start(); });
+}
+function renderGuess(){
+  const pick=st&&st.guess, ans=outcome(cur());
+  $('guess').innerHTML=Object.entries(OUT).map(([k,o])=>{
+    let cls=''; if(pick){ if(k===ans) cls='right'; else if(k===pick) cls='wrong'; }
+    return `<button data-g="${k}" class="${cls}" ${pick?'disabled':''}><b>${o.t}</b><span>${o.d}</span></button>`; }).join('');
+  $('guess').querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>guess(b.dataset.g));
+}
+function start(){
+  st=null; $('stage').hidden=true; $('verdict').innerHTML='';
+  renderTabs(); renderScenario(); renderGuess();
+}
+function guess(g){
+  const sc=cur(), ans=outcome(sc);
+  st={guess:g, S:steps(sc), i:0};
+  if(g===ans){ score+=10; if(mode!=='sandbox') won[mode]=true; }
+  $('score').textContent=score;
+  renderTabs(); renderGuess();
+  $('stage').hidden=false;
+  $('mainTitle').textContent = sc.call==='poll'?'main.cpp: an event loop with poll()':'main.cpp: the receive loop';
+  showStep();
+}
+function showStep(){
+  const sc=cur(), S=st.S, s=S[st.i];
+  ['world','user','kernel'].forEach(l=>{ $('L'+l).classList.toggle('active', s.lane===l);
+    const last=[...S.slice(0,st.i+1)].reverse().find(x=>x.lane===l); $('B'+l).textContent= last?last.text:'—'; });
+  const [bt,bc]=BADGE[s.state]; $('pbadge').textContent=bt; $('pbadge').className='badge '+bc;
+  $('codeMain').innerHTML=codeHTML(sc.call==='poll'?MAIN_POLL:MAIN_RECV, s.main);
+  $('codeHandler').innerHTML = sc.sig==='STOPCONT' ? '<div class="c">  // no handler runs: SIGSTOP cannot be caught</div>' : codeHTML(sc.handler==='exit'?H_EXIT:H_FLAG, s.hnd);
+  $('log').innerHTML=S.slice(0,st.i+1).map((x,i)=>`<div><span class="n">${i+1}</span><span class="w w-${x.lane}">${x.lane==='world'?'world':x.lane}</span><span>${x.text}</span></div>`).join('');
+  const end=st.i===S.length-1;
+  $('next').disabled=end; $('all').disabled=end;
+  if(end){
+    const o=outcome(sc), right=st.guess===o, L=lesson(sc,o);
+    $('verdict').innerHTML=`<div class="verdict ${right?'good':'bad'}"><b class="h">${right?'Correct: ':'Not quite. The answer: '}${OUT[o].t}</b><span>${why(sc,o)}</span></div>
+      <div class="verdict ${L.cls}"><b class="h">${L.t}</b><span>${L.b}</span></div>
+      <div class="row">${mode!=='sandbox'&&mode<STORY.length-1?'<button class="primary" id="nextRound">Next round →</button>':''}<button id="again">Replay this scenario</button></div>`;
+    const nr=$('nextRound'); if(nr) nr.onclick=()=>{ mode++; start(); window.scrollTo({top:0,behavior:'smooth'}); };
+    $('again').onclick=start;
+  }
+}
+$('next').onclick=()=>{ if(st && st.i<st.S.length-1){ st.i++; showStep(); } };
+$('all').onclick=()=>{ if(st){ st.i=st.S.length-1; showStep(); } };
+start();
+})();
+</script>
+</body>
+</html>
