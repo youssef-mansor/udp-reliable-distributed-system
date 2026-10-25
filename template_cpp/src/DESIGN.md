@@ -24,6 +24,7 @@ ACK:  header only; seq = cumulative "delivered everything <= seq from you"
 ## Concurrency
 Single-threaded event loop per process: non-blocking socket + `poll()`.
 No locks, no thread switches (all processes share 2 cores).
+- Each iteration reads at most `MAX_DRAIN` packets (e.g. 64), so ACKs and timers never starve under constant traffic; leftovers stay in the buffer and the next `poll()` returns immediately.
 
 ## Sender
 - Retransmits unACKed messages on timeout until ACKed.
