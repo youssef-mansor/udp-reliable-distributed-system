@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Be the Event Loop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#EDF0EB; --surface:#FAFBF8; --sunk:#E3E8E2; --ink:#17201C; --muted:#5B665F; --line:#D2D9D3;
+  --accent:#2D47C9; --accent-ink:#FFFFFF; --ack:#1D8577; --net:#8A3D8E;
+  --good:#2C7A38; --bad:#BC3324; --warn:#A86C12;
+  --good-bg:#E1F0E2; --bad-bg:#F7E2DE; --warn-bg:#F6ECD8;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+    --accent:#8197FF; --accent-ink:#0C1020; --ack:#4BC3B1; --net:#CB80CF;
+    --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+    --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+  --accent:#8197FF; --accent-ink:#0C1020; --ack:#4BC3B1; --net:#CB80CF;
+  --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+  --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+}
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.5; padding-inline:16px; padding-block:24px 48px}
+.wrap{max-width:1160px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; letter-spacing:-0.01em}
+h1{font-size:clamp(28px,5vw,42px); font-weight:800; line-height:1.05}
+h2{font-size:20px; font-weight:800}
+h3{font-size:15px; font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+button{font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); padding:8px 12px}
+button:hover:not(:disabled){border-color:var(--ink)}
+button:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button:disabled{opacity:.45; cursor:not-allowed}
+button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+button.call{font-family:var(--mono); font-size:13px}
+input[type=number]{font-family:var(--mono); font-size:14px; width:84px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink)}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:12px}
+.row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.tabs{display:flex; flex-wrap:wrap; gap:6px}
+.tabs button{font-size:13px; padding:6px 11px}
+.tabs button.cur{border-color:var(--accent); color:var(--accent); font-weight:600}
+.tabs button.won::after{content:" ✓"; color:var(--good)}
+.grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:18px; align-items:start}
+@media (max-width:900px){ .grid{grid-template-columns:minmax(0,1fr)} }
+.clock{font-family:var(--display); font-weight:800; font-size:34px; font-variant-numeric:tabular-nums; line-height:1}
+.clock small{font-family:var(--mono); font-size:13px; font-weight:400; color:var(--muted)}
+.pstate{font-family:var(--mono); font-size:12.5px; font-weight:600; padding:4px 10px; border-radius:8px; border:1.5px solid currentColor}
+.s-run{color:var(--good)} .s-sleep{color:var(--accent)} .s-stuck{color:var(--bad)}
+.zone{border:1px solid var(--line); border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:8px; background:var(--sunk)}
+.zone .lab{font-family:var(--mono); font-size:11px; color:var(--muted); display:flex; justify-content:space-between; gap:8px}
+.zone.net{border-style:dashed; background:transparent}
+.pkts{display:flex; flex-wrap:wrap; gap:4px; min-height:26px}
+.pk{font-family:var(--mono); font-size:11px; padding:3px 7px; border-radius:5px; background:var(--ack); color:var(--surface)}
+.pk.fut{background:transparent; color:var(--net); border:1px dashed var(--net)}
+.more{font-family:var(--mono); font-size:11px; color:var(--muted); align-self:center}
+table{border-collapse:collapse; width:100%; font-size:13px}
+th,td{text-align:left; padding:5px 8px; border-bottom:1px solid var(--line)}
+th{font-family:var(--mono); font-size:10.5px; color:var(--muted); font-weight:400; text-transform:uppercase; letter-spacing:.06em}
+td.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.tag{font-family:var(--mono); font-size:11px; padding:1px 7px; border-radius:99px; border:1px solid currentColor; white-space:nowrap}
+.t-good{color:var(--good)} .t-bad{color:var(--bad)} .t-warn{color:var(--warn)} .t-acc{color:var(--accent)} .t-muted{color:var(--muted)}
+.strace{font-family:var(--mono); font-size:12px; background:var(--sunk); border:1px solid var(--line); border-radius:10px; padding:8px 10px; max-height:300px; overflow:auto; display:flex; flex-direction:column; gap:2px}
+.strace div{white-space:pre-wrap; word-break:break-word}
+.strace .t{color:var(--muted)} .strace .ok{color:var(--good)} .strace .to{color:var(--accent)} .strace .err{color:var(--warn)} .strace .bad{color:var(--bad)} .strace .note{color:var(--muted); font-style:italic}
+.goals{display:flex; flex-direction:column; gap:6px}
+.goal{display:grid; grid-template-columns:20px 1fr; gap:8px; font-size:13.5px; align-items:start}
+.goal .c{width:18px; height:18px; border-radius:5px; border:1.5px solid var(--line); margin-top:2px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--surface)}
+.goal.ok .c{background:var(--good); border-color:var(--good)}
+.goal.no .c{background:var(--bad); border-color:var(--bad)}
+.fb{border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:6px; font-size:14px}
+.fb.good{background:var(--good-bg); border:1px solid color-mix(in srgb, var(--good) 40%, transparent)}
+.fb.bad{background:var(--bad-bg); border:1px solid color-mix(in srgb, var(--bad) 45%, transparent)}
+.fb.warn{background:var(--warn-bg); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent)}
+.fb b.h{font-family:var(--display); font-size:16px}
+.callrow{display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px; border:1px solid var(--line); border-radius:10px}
+.callrow .sig{font-family:var(--mono); font-size:12.5px; color:var(--muted); width:100%}
+.cheat{font-size:13px}
+.cheat td:first-child{font-family:var(--mono); white-space:nowrap}
+.tbl{overflow-x:auto}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+.seg button{border:0; border-radius:0; padding:6px 10px; font-size:13px}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink); color:var(--surface)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:6px">
+    <span class="eyebrow">Non-blocking sockets × poll()</span>
+    <h1>Be the Event Loop</h1>
+    <p class="muted" style="max-width:70ch">You are a process's single thread: the sender (process 1) in levels 1–3, the receiver (process 2) in level 4. Choose every system call yourself. Wake up on time, never sleep where you can't be woken, and don't burn the CPU asking "anything yet?"</p>
+  </header>
+
+  <div class="panel">
+    <div class="tabs" id="tabs"></div>
+    <div id="intro"></div>
+  </div>
+
+  <div class="grid">
+    <div class="wrap" style="gap:16px">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <div class="clock" id="clock"></div>
+          <span class="pstate" id="pstate"></span>
+        </div>
+        <div class="zone net"><div class="lab"><span>network: on its way (your process can't see this)</span><span id="netCount"></span></div><div class="pkts" id="net"></div></div>
+        <div class="zone"><div class="lab"><span>kernel: socket receive buffer</span><span id="bufCount"></span></div><div class="pkts" id="buf"></div></div>
+        <div>
+          <h3 style="margin-bottom:6px" id="timersTitle">Your retransmission timers</h3>
+          <div class="tbl" id="timersBox"></div>
+        </div>
+      </div>
+      <div class="panel" id="actions"></div>
+    </div>
+    <div class="wrap" style="gap:16px">
+      <div class="panel"><h3>Goals</h3><div class="goals" id="goals"></div></div>
+      <div id="fb"></div>
+      <div class="panel"><div class="row" style="justify-content:space-between"><h3>Syscall trace</h3><span class="muted mono" style="font-size:11px">like strace -tt</span></div><div class="strace" id="strace"></div></div>
+      <div class="panel cheat">
+        <h3>Cheat sheet</h3>
+        <div class="tbl"><table><tbody>
+          <tr><td>poll(.., T) → 1</td><td>The socket is readable: at least one datagram waits. Returned immediately if one was already there.</td></tr>
+          <tr><td>poll(.., T) → 0</td><td>Timeout: T ms passed with nothing. Time for your timers.</td></tr>
+          <tr><td>poll(.., 0)</td><td>Check without sleeping. In a loop on an empty buffer, that's busy-waiting.</td></tr>
+          <tr><td>poll(.., -1)</td><td>Sleep until a datagram arrives, however long. Your timers can't wake you.</td></tr>
+          <tr><td>recvfrom → n</td><td>One datagram, n bytes. Never more than one per call.</td></tr>
+          <tr><td>recvfrom → -1 EAGAIN</td><td>Non-blocking socket, buffer empty. Not an error: stop draining.</td></tr>
+          <tr><td>blocking recvfrom</td><td>On an empty buffer, sleeps until a datagram arrives. Timers can't wake you.</td></tr>
+        </tbody></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const COST={poll:0.01, recv:0.05, timer:0.02};
+const BUFCAP=222;
+let L, s, levelIdx=0; const won={};
+
+const LEVELS=[
+ { name:'Nothing there', blocking:false, nonblockBtn:false, auto:false,
+   story:'Your buffer is empty. Packet #7 is unACKed and due for retransmission at <b>t = 40 ms</b>. Its ACK is out there somewhere, but you can\'t know when it will arrive. Choose how long to sleep.',
+   setup:()=>({ buf:[], arrivals:[{t:120, ack:7}], timers:[{id:7, due:40}] }),
+   goals:[
+     {t:'Retransmit #7 no more than 2 ms after it falls due', f:()=>handledLate(7)!==null && handledLate(7)<=2, fail:()=>overdue(7)>2},
+     {t:'Waste at most 2 syscalls', f:()=>s.ended && s.wasted<=2, fail:()=>s.wasted>2},
+   ],
+   end:()=>s.timers.every(x=>x.handled||x.acked) || s.stuck,
+   tip:'Set the poll timeout to the time left until the earliest timer: 40 − now.'},
+ { name:'Five waiting', blocking:false, nonblockBtn:false, auto:false,
+   story:'Five ACK packets are already sitting in your buffer. Read all of them with as few syscalls as possible. Watch what poll() returns: it isn\'t 5.',
+   setup:()=>({ buf:[3,4,5,6,8].map(a=>({ack:a})), arrivals:[], timers:[3,4,5,6,8].map(id=>({id, due:50})) }),
+   goals:[
+     {t:'Read all 5 packets', f:()=>s.read>=5},
+     {t:'Use exactly one poll()', f:()=>s.ended && s.polls===1, fail:()=>s.polls>1},
+     {t:'Stop draining at the first EAGAIN (no extra recvfrom after it)', f:()=>s.ended && s.eagain===1, fail:()=>s.eagain>1},
+   ],
+   end:()=>s.eagain>=1 && s.buf.length===0,
+   tip:'One poll(), then recvfrom() until it returns -1 EAGAIN.'},
+ { name:'The blocking trap', blocking:true, nonblockBtn:true, auto:false,
+   story:'Your socket is <b>blocking</b>. Three ACKs wait in the buffer, but your process doesn\'t know how many. Packet #9 is due at <b>t = 10 ms</b>, and the next datagram won\'t arrive until t = 200 ms. Drain the buffer and still retransmit #9 on time.',
+   setup:()=>({ buf:[1,2,4].map(a=>({ack:a})), arrivals:[{t:200, ack:11}], timers:[{id:1,due:60},{id:2,due:60},{id:4,due:60},{id:9,due:10}] }),
+   goals:[
+     {t:'Read the 3 waiting packets', f:()=>s.read>=3},
+     {t:'Never fall asleep inside recvfrom()', f:()=>s.ended && !s.blockedInRecv, fail:()=>s.blockedInRecv},
+     {t:'Retransmit #9 no more than 2 ms late', f:()=>handledLate(9)!==null && handledLate(9)<=2, fail:()=>overdue(9)>2},
+   ],
+   end:()=>timer(9).handled || s.now>=200 || s.stuck,
+   tip:'You can\'t know there are exactly 3. Make the socket non-blocking so the 4th recvfrom() returns EAGAIN instead of sleeping.'},
+ { name:'Starvation', kind:'receiver', blocking:false, nonblockBtn:false, auto:true,
+   story:'Now you are <b>process 2, the receiver</b>. Process 1 keeps up to 150 unACKed DATA packets in flight and retransmits any packet that stays unACKed for 3 ms. Your loop is: poll() → drain → send one cumulative ACK. 150 packets are already waiting. Run it for 20 ms.<br><br><b>Starvation</b>: one part of your loop (the drain) keeps the single thread busy, so another part (sending ACKs) never gets to run, even though nothing is broken. Here it feeds itself: no ACKs → the sender\'s timers fire → retransmissions → the buffer never empties → the drain never ends.',
+   setup:()=>({ buf:[], arrivals:[], timers:[] }),
+   goals:[
+     {t:'Run 20 ms of simulated time', f:()=>s.now>=20},
+     {t:'Never go more than 4 ms without sending an ACK', f:()=>s.now>=20 && ackGap()<=4, fail:()=>ackGap()>4},
+     {t:'Deliver at least 200 distinct messages', f:()=>s.now>=20 && s.rx.delivered.size>=200},
+   ],
+   end:()=>s.now>=20,
+   tip:'Draining "until EAGAIN" never ends: retransmissions refill the buffer as fast as you read it. Cap the drain at MAX_DRAIN so the ACK step gets to run.'},
+];
+
+function timer(id){ return s.timers.find(x=>x.id===id); }
+function handledLate(id){ const t=timer(id); return t&&t.handled? t.late : null; }
+function overdue(id){ const t=timer(id); if(!t) return 0; if(t.handled) return t.late; if(t.acked) return Math.max(0,(t.ackAt??0)-t.due); return Math.max(0,s.now-t.due); }
+function maxLate(){ return Math.max(0,...s.timers.map(t=> t.handled?t.late:(s.now>t.due? s.now-t.due:0))); }
+const f2=x=>x.toFixed(2);
+
+function start(i){
+  levelIdx=i; L=LEVELS[i]; const set=L.setup();
+  s={ now:0, buf:set.buf, arrivals:set.arrivals.sort((a,b)=>a.t-b.t), timers:set.timers.map(t=>({...t, handled:false, acked:false})),
+      blocking:L.blocking, state:'run', trace:[], polls:0, recvs:0, eagain:0, read:0, wasted:0, lastEagain:false, lastPoll0Empty:false,
+      stuck:false, blockedInRecv:false, ended:false, drops:0, drainMode:'cap', maxDrain:64, timeout:'' };
+  if(L.kind==='receiver'){ rxInit(); s.drainMode='eagain'; }
+  note(`level start · socket is ${s.blocking?'BLOCKING':'non-blocking (O_NONBLOCK)'}`);
+  render();
+}
+function line(txt, cls){ s.trace.push({t:s.now, txt, cls}); }
+function note(txt){ line(txt,'note'); }
+function deliver(){ while(s.arrivals.length && s.arrivals[0].t<=s.now+1e-9){ const a=s.arrivals.shift(); if(s.buf.length<BUFCAP) s.buf.push({ack:a.ack}); else s.drops++; } }
+function advanceTo(t){ if(t<=s.now) return; s.now=t; deliver(); }
+
+/* system calls */
+function poll(timeout){
+  s.polls++; deliver();
+  if(s.buf.length){ s.now+=COST.poll; line(`poll([{fd=3, events=POLLIN}], 1, ${timeout}) = 1 ([{fd=3, revents=POLLIN}])`,'ok'); note('returned immediately: something was already readable'); s.lastPoll0Empty=false; return 1; }
+  const next=s.arrivals.length? s.arrivals[0].t : null;
+  if(timeout===0){ s.now+=COST.poll; if(s.lastPoll0Empty){ s.wasted++; note('busy-waiting: poll(0) on an empty buffer again. The CPU spins for nothing'); } else note('nothing there; returned without sleeping'); s.lastPoll0Empty=true; line(`poll([{fd=3, events=POLLIN}], 1, 0) = 0 (Timeout)`,'to'); return 0; }
+  s.lastPoll0Empty=false;
+  if(timeout<0){
+    if(next===null){ s.stuck=true; s.state='stuck'; line(`poll([{fd=3, events=POLLIN}], 1, -1) ...`,'bad'); note('asleep forever: no datagram will ever come, and timers cannot wake you'); return null; }
+    s.state='sleep'; advanceTo(next); s.state='run';
+    line(`poll([{fd=3, events=POLLIN}], 1, -1) = 1 ([{fd=3, revents=POLLIN}])`,'ok'); note(`slept until a datagram arrived at t=${f2(next)}`); return 1;
+  }
+  const wake=s.now+timeout;
+  if(next!==null && next<=wake){ advanceTo(next); line(`poll([{fd=3, events=POLLIN}], 1, ${timeout}) = 1 ([{fd=3, revents=POLLIN}])`,'ok'); note(`woken early by a datagram at t=${f2(next)}`); return 1; }
+  advanceTo(wake); line(`poll([{fd=3, events=POLLIN}], 1, ${timeout}) = 0 (Timeout)`,'to'); return 0;
+}
+function recv(){
+  s.recvs++; deliver();
+  if(s.buf.length){
+    s.now+=COST.recv; const p=s.buf.shift(); s.read++; s.lastEagain=false;
+    const t=s.timers.find(x=>x.id===p.ack && !x.handled && !x.acked); if(t){ t.acked=true; t.ackAt=s.now; }
+    line(`recvfrom(3, ..., 41, 0, NULL, NULL) = 8`,'ok'); if(p.ack) note(`ACK for #${p.ack}${t?': its timer is cancelled':''}`); deliver(); return 8;
+  }
+  if(!s.blocking){
+    s.now+=COST.recv; s.eagain++; if(s.lastEagain){ s.wasted++; note('another EAGAIN: wasted syscall, the buffer was already known empty'); }
+    s.lastEagain=true; line(`recvfrom(3, ..., 41, 0, NULL, NULL) = -1 EAGAIN (Resource temporarily unavailable)`,'err'); return -1;
+  }
+  s.blockedInRecv=true; const next=s.arrivals.length? s.arrivals[0].t : null;
+  if(next===null){ s.stuck=true; s.state='stuck'; line('recvfrom(3, ..., 41, 0, NULL, NULL) ...','bad'); note('blocked forever: nothing will ever arrive'); return null; }
+  s.state='sleep'; note('buffer empty and the socket is blocking: asleep inside recvfrom()'); advanceTo(next); s.state='run';
+  const p=s.buf.shift(); s.read++; s.now+=COST.recv; line(`recvfrom(3, ..., 41, 0, NULL, NULL) = 8`,'bad'); note(`woke at t=${f2(next)}, only because a datagram arrived. Timers had no say`); return 8;
+}
+function doTimers(){
+  const due=s.timers.filter(t=>!t.handled && !t.acked && t.due<=s.now+1e-9);
+  if(!due.length){ s.wasted++; line('check timers: nothing due yet','note'); return; }
+  due.forEach(t=>{ t.handled=true; t.late=Math.max(0,s.now-t.due); s.now+=COST.timer; line(`sendto(3, ..., 40, 0, {127.0.0.1:11002}, 16) = 40`,'ok'); note(`retransmitted #${t.id}, ${t.late<0.005?'right on time':f2(t.late)+' ms late'}`); });
+}
+function setNonblock(){ s.blocking=false; line('fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0','ok'); note('socket is now non-blocking'); }
+
+/* auto iteration (level 4) */
+function iteration(){
+  const pending=s.timers.filter(t=>!t.handled && !t.acked);
+  const nextDue=pending.length? Math.min(...pending.map(t=>t.due)) : null;
+  const timeout= nextDue===null? 5 : Math.max(0, +(nextDue-s.now).toFixed(2));
+  poll(timeout);
+  const before=s.trace.length; let n=0;
+  while(true){
+    if(s.drainMode==='cap' && n>=s.maxDrain){ note(`drain capped at ${s.maxDrain}: leaving the rest for the next poll()`); break; }
+    if(s.now>=20){ if(s.drainMode==='eagain') note('still draining at t=20 ms: EAGAIN never came'); break; }
+    const r=recv(); if(r===-1) break; n++;
+  }
+  // compact the trace: keep two reads, summarize the rest
+  const drained=s.trace.splice(before);
+  const reads=drained.filter(x=>x.cls==='ok'), rest=drained.filter(x=>x.cls!=='ok');
+  s.trace.push(...reads.slice(0,2));
+  if(reads.length>2) s.trace.push({t:reads[reads.length-1].t, txt:`… ${reads.length-2} more recvfrom() = 8`, cls:'note'});
+  s.trace.push(...rest);
+  doTimers();
+}
+
+/* receiver engine (level 4) */
+const RX={W:150, RTO:3, RATE:12, DELAY:0.1, DT:0.01, PRE:150};
+function rxInit(){
+  s.rx={ nextId:RX.PRE+1, unacked:new Map(), ackedUpTo:0, acc:0, delivered:new Set(), c:0, dup:0, retx:0, acks:0, lastAck:0, maxGap:0, ackFlight:[] };
+  for(let i=1;i<=RX.PRE;i++){ s.buf.push({id:i}); s.rx.unacked.set(i,0); }
+}
+function rxSend(id){ s.arrivals.push({t:s.now+RX.DELAY, id}); }
+function rxStep(dt){
+  const r=s.rx;
+  r.ackFlight=r.ackFlight.filter(a=>{ if(a.t<=s.now){ if(a.v>r.ackedUpTo){ r.ackedUpTo=a.v; for(const id of [...r.unacked.keys()]) if(id<=a.v) r.unacked.delete(id); } return false; } return true; });
+  r.acc+=RX.RATE*dt;
+  while(r.acc>=1 && r.unacked.size<RX.W){ const id=r.nextId++; rxSend(id); r.unacked.set(id,s.now); r.acc-=1; }
+  if(r.unacked.size>=RX.W) r.acc=Math.min(r.acc,1);
+  for(const [id,t] of r.unacked) if(s.now-t>=RX.RTO){ rxSend(id); r.unacked.set(id,s.now); r.retx++; }
+  while(s.arrivals.length && s.arrivals[0].t<=s.now+1e-9){ const a=s.arrivals.shift(); if(s.buf.length<BUFCAP) s.buf.push({id:a.id}); else s.drops++; }
+}
+function rxAdvance(dt){ const target=s.now+dt; while(s.now<target-1e-9){ const d=Math.min(RX.DT,target-s.now); s.now+=d; rxStep(d); } }
+function ackGap(){ return Math.max(s.rx.maxGap, s.now-s.rx.lastAck); }
+function rxIteration(){
+  const r=s.rx;
+  s.polls++;
+  if(s.buf.length){ rxAdvance(COST.poll); line('poll([{fd=3, events=POLLIN}], 1, 5) = 1 ([{fd=3, revents=POLLIN}])','ok'); }
+  else { let w=0; s.state='sleep'; while(!s.buf.length && w<5 && s.now<20){ rxAdvance(RX.DT); w+=RX.DT; } s.state='run';
+    line(`poll([{fd=3, events=POLLIN}], 1, 5) = ${s.buf.length?'1 ([{fd=3, revents=POLLIN}])':'0 (Timeout)'}`, s.buf.length?'ok':'to'); }
+  let n=0, fresh=0, dups=0;
+  while(true){
+    if(s.drainMode==='cap' && n>=s.maxDrain){ note(`drain capped at ${s.maxDrain}: moving on to the ACK step`); break; }
+    if(s.now>=20){ if(s.drainMode==='eagain') note('still draining at t=20 ms: EAGAIN never came, so no ACK was ever sent'); break; }
+    if(!s.buf.length){ s.recvs++; s.eagain++; rxAdvance(COST.recv); line('recvfrom(3, ..., 41, 0, NULL, NULL) = -1 EAGAIN (Resource temporarily unavailable)','err'); break; }
+    const p=s.buf.shift(); s.recvs++; s.read++; rxAdvance(COST.recv);
+    if(r.delivered.has(p.id)){ r.dup++; dups++; } else { r.delivered.add(p.id); fresh++; while(r.delivered.has(r.c+1)) r.c++; }
+    if(n<2) line(`recvfrom(3, ..., 41, 0, NULL, NULL) = 12   DATA #${p.id}`,'ok');
+    n++;
+  }
+  if(n>2) note(`… ${n-2} more recvfrom() = 12 (this drain: ${fresh} new, ${dups} duplicates)`);
+  else if(n) note(`this drain: ${fresh} new, ${dups} duplicates`);
+  if(s.now>=20) return;
+  r.maxGap=Math.max(r.maxGap, s.now-r.lastAck); r.lastAck=s.now; r.acks++;
+  r.ackFlight.push({t:s.now+RX.DELAY, v:r.c}); rxAdvance(COST.timer);
+  line('sendto(3, ..., 8, 0, {127.0.0.1:11001}, 16) = 8','ok'); note(`cumulative ACK ${r.c}: process 1 can stop retransmitting everything ≤ ${r.c}`);
+}
+
+/* goals + feedback */
+function check(){
+  if(!s.ended && (L.end() || s.stuck)) s.ended=true;
+  const res=L.goals.map(g=> g.f()? 'ok' : (g.fail&&g.fail())? 'no' : (s.ended?'no':''));
+  if(s.ended){ const all=res.every(r=>r==='ok'); if(all) won[levelIdx]=true; return {res, all}; }
+  return {res, all:false};
+}
+function feedback(c){
+  if(!s.ended) return '';
+  if(c.all) return `<div class="fb good"><b class="h">Level cleared</b><span>${LEVELS[levelIdx].win||winText()}</span><div class="row">${levelIdx<LEVELS.length-1?'<button class="primary" id="nextL">Next level →</button>':''}<button id="retry">Play again</button></div></div>`;
+  return `<div class="fb bad"><b class="h">Not this time</b><span>${failText()}</span><span class="muted">Hint: ${L.tip}</span><div class="row"><button class="primary" id="retry">Try again</button></div></div>`;
+}
+function winText(){
+  return ['poll() with a timeout equal to the time until your next timer is the core of the event loop: you sleep exactly as long as you can afford, and a datagram can still wake you early.',
+          'poll() returned 1, the number of ready sockets, not the number of packets. You only learn how many by draining until EAGAIN.',
+          'Non-blocking + poll() is the pair: the drain ends with EAGAIN instead of a sleep inside recvfrom(), and poll()\'s timeout wakes you for #9.',
+          'Capping the drain lets the ACK step run every few milliseconds. Each ACK lets process 1 stop retransmitting and slide its window forward, so new messages flow instead of the same 150 duplicates. Leftover packets wait safely, and the next poll() returns immediately.'][levelIdx];
+}
+function failText(){
+  if(s.stuck) return 'Your process fell asleep with nothing that could ever wake it. Timers live in your own code, so the kernel cannot wake you for them. Only a timeout can.';
+  if(levelIdx===0){ if(s.wasted>2) return 'Calling poll(0) over and over is busy-waiting: the CPU spins, asking "anything yet?" thousands of times. On 2 shared cores, that steals time from every other process.'; return `poll() slept past t=40 ms, so #7 went out ${f2(overdue(7))} ms late. A timeout of -1 or one longer than 40 − now lets your timer slip.`; }
+  if(levelIdx===1){ if(s.polls>1) return 'Extra poll() calls: after the first one, you already know the socket is readable. Keep calling recvfrom() until EAGAIN, without polling in between.'; return 'After the first EAGAIN, the buffer is known empty. More recvfrom() calls return EAGAIN again, wasting a syscall each.'; }
+  if(levelIdx===2){ if(s.blockedInRecv) return `The 4th recvfrom() found the buffer empty and, on a blocking socket, went to sleep until t=200 ms. #9 went out ${f2(overdue(9))} ms late. A blocking socket can't be drained safely, because you never know which read is the last.`; return '#9 was retransmitted late. Use poll() with a timeout that ends at t=10 ms, then check your timers.'; }
+  return s.drainMode==='eagain' ? `That was starvation. The drain hogged the thread for all 20 ms, so not a single ACK went out. Process 1 never learned anything had arrived: it retransmitted ${s.rx.retx} times, its window stayed full, and you delivered only ${s.rx.delivered.size} distinct messages while ${s.rx.dup} of your reads were duplicates.` : `ACKs went out up to ${f2(ackGap())} ms apart, and ${s.rx.delivered.size} distinct messages were delivered. A large MAX_DRAIN still starves the ACK step for long stretches. Try a smaller value.`;
+}
+
+/* rendering */
+function render(){
+  $('tabs').innerHTML=LEVELS.map((l,i)=>`<button data-l="${i}" class="${i===levelIdx?'cur':''} ${won[i]?'won':''}">Level ${i+1}: ${l.name}</button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>start(Number(b.dataset.l)));
+  $('intro').innerHTML=`<p>${L.story}</p>`;
+  $('clock').innerHTML=`t = ${f2(s.now)} <small>ms</small>`;
+  const ps= s.stuck? ['ASLEEP FOREVER','s-stuck'] : s.state==='sleep'? ['SLEEPING','s-sleep'] : ['RUNNING','s-run'];
+  $('pstate').textContent=ps[0]; $('pstate').className='pstate '+ps[1];
+  const chips=(arr,fut,max)=>arr.slice(0,max).map(p=>`<span class="pk ${fut?'fut':''}">${fut?'t='+f2(p.t)+' ':''}${p.id!==undefined?'DATA #'+p.id:'ACK'+(p.ack?' #'+p.ack:'')}</span>`).join('')+(arr.length>max?`<span class="more">+${arr.length-max} more</span>`:'');
+  $('net').innerHTML=chips(s.arrivals,true,6)||'<span class="more">nothing coming</span>'; $('netCount').textContent=s.arrivals.length? `${s.arrivals.length} on the way`:'';
+  $('buf').innerHTML=chips(s.buf,false,24)||'<span class="more">empty</span>'; $('bufCount').textContent=`${s.buf.length} waiting${s.drops?` · ${s.drops} dropped (full)`:''}`;
+  const tr=s.timers.slice(0,8).map(t=>{ let st;
+    if(t.handled) st=`<span class="tag ${t.late>2?'t-bad':'t-good'}">retransmitted${t.late>0.005?' '+f2(t.late)+' ms late':' on time'}</span>`;
+    else if(t.acked) st='<span class="tag t-muted">ACKed: cancelled</span>';
+    else if(s.now>=t.due) st=`<span class="tag t-bad">OVERDUE ${f2(s.now-t.due)} ms</span>`;
+    else st=`<span class="tag t-acc">in ${f2(t.due-s.now)} ms</span>`;
+    return `<tr><td class="num">#${t.id}</td><td class="num">${f2(t.due)} ms</td><td>${st}</td></tr>`; }).join('');
+  if(L.kind==='receiver'){
+    const r=s.rx, gap=ackGap();
+    $('timersTitle').textContent='Receiver and sender state';
+    $('timersBox').innerHTML=`<table><tbody>
+      <tr><td>distinct messages delivered</td><td class="num">${r.delivered.size}</td></tr>
+      <tr><td>duplicate reads (wasted)</td><td class="num">${r.dup}</td></tr>
+      <tr><td>your cumulative ACK point</td><td class="num">${r.c}</td></tr>
+      <tr><td>ACKs sent</td><td class="num">${r.acks}</td></tr>
+      <tr><td>longest stretch without an ACK</td><td class="num"><span class="tag ${gap>4?'t-bad':'t-good'}">${f2(gap)} ms</span></td></tr>
+      <tr><td>process 1: unACKed in flight</td><td class="num">${r.unacked.size} / ${RX.W}${r.unacked.size>=RX.W?' <span class="tag t-bad">window full</span>':''}</td></tr>
+      <tr><td>process 1: retransmissions</td><td class="num">${r.retx}</td></tr>
+    </tbody></table>`;
+  } else {
+    $('timersTitle').textContent='Your retransmission timers';
+    $('timersBox').innerHTML=`<table><thead><tr><th>packet</th><th>due at</th><th>status</th></tr></thead><tbody>${tr}${s.timers.length>8?`<tr><td colspan="3" class="muted">+${s.timers.length-8} more</td></tr>`:''}</tbody></table>`;
+  }
+  const c=check();
+  $('goals').innerHTML=L.goals.map((g,i)=>`<div class="goal ${c.res[i]}"><span class="c">${c.res[i]==='ok'?'✓':c.res[i]==='no'?'✕':''}</span><span>${g.t}</span></div>`).join('')
+    + `<div class="muted mono" style="font-size:12px">syscalls: ${s.polls} poll · ${s.recvs} recvfrom · wasted: ${s.wasted}</div>`;
+  $('fb').innerHTML=feedback(c);
+  const st=$('strace'); st.innerHTML=s.trace.slice(-80).map(x=>`<div class="${x.cls}"><span class="t">${f2(x.t).padStart(6)} </span>${x.cls==='note'?'↳ '+x.txt:x.txt}</div>`).join(''); st.scrollTop=st.scrollHeight;
+  renderActions();
+  const nl=$('nextL'); if(nl) nl.onclick=()=>start(levelIdx+1);
+  const rt=$('retry'); if(rt) rt.onclick=()=>start(levelIdx);
+}
+function renderActions(){
+  const dis=s.ended||s.stuck?'disabled':'';
+  let h='';
+  if(!L.auto){
+    h=`<h3>Your next system call</h3>
+    <div class="callrow"><span class="sig">int poll(struct pollfd *fds, nfds_t nfds, int timeout_ms);</span>
+      <span class="mono" style="font-size:13px">timeout =</span><input type="number" id="tmo" value="${s.timeout}" placeholder="ms">
+      <button class="call" data-t="-1" ${dis}>-1</button><button class="call" data-t="0" ${dis}>0</button>
+      <button class="call primary" id="pollGo" ${dis}>poll()</button></div>
+    <div class="callrow"><span class="sig">ssize_t recvfrom(fd, buf, len, 0, NULL, NULL);</span><button class="call primary" id="recvGo" ${dis}>recvfrom()</button>
+      <span class="muted" style="font-size:12.5px">reads one datagram</span></div>
+    <div class="callrow"><span class="sig">your code: check timers, retransmit whatever is due</span><button class="call primary" id="timGo" ${dis}>check timers</button></div>
+    ${L.nonblockBtn?`<div class="callrow"><span class="sig">fcntl(fd, F_SETFL, flags | O_NONBLOCK);</span><button class="call" id="nbGo" ${dis||(!s.blocking?'disabled':'')}>make non-blocking</button><span class="muted" style="font-size:12.5px">socket is ${s.blocking?'blocking':'non-blocking'}</span></div>`:''}`;
+  } else {
+    h=`<h3>Configure your loop, then run it</h3>
+    <div class="callrow"><span class="sig">each iteration: poll() → drain → send one cumulative ACK to process 1</span>
+      <span class="seg"><button data-dm="eagain" aria-pressed="${s.drainMode==='eagain'}">drain until EAGAIN</button><button data-dm="cap" aria-pressed="${s.drainMode==='cap'}">at most MAX_DRAIN</button></span>
+      ${s.drainMode==='cap'?`<span class="mono" style="font-size:13px">MAX_DRAIN =</span><input type="number" id="md" min="1" max="500" value="${s.maxDrain}">`:''}</div>
+    <div class="row"><button class="primary" id="iterGo" ${dis}>Run one iteration</button><button id="runGo" ${dis}>Run until t = 20 ms</button></div>`;
+  }
+  $('actions').innerHTML=h;
+  const go=(fn)=>{ if(s.ended||s.stuck) return; fn(); render(); };
+  if(!L.auto){
+    const inp=$('tmo'); inp.oninput=()=>{ s.timeout=inp.value; };
+    $('actions').querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>go(()=>{ s.timeout=b.dataset.t; poll(Number(b.dataset.t)); }));
+    $('pollGo').onclick=()=>{ if(inp.value===''){ inp.focus(); return; } go(()=>poll(Math.round(Number(inp.value)*100)/100)); };
+    inp.onkeydown=e=>{ if(e.key==='Enter') $('pollGo').click(); };
+    $('recvGo').onclick=()=>go(recv); $('timGo').onclick=()=>go(doTimers);
+    const nb=$('nbGo'); if(nb) nb.onclick=()=>go(setNonblock);
+  } else {
+    $('actions').querySelectorAll('[data-dm]').forEach(b=>b.onclick=()=>{ const keep=s.maxDrain; if(s.now>0){ start(levelIdx); s.maxDrain=keep; } s.drainMode=b.dataset.dm; render(); });
+    const md=$('md'); if(md) md.onchange=()=>{ s.maxDrain=Math.max(1,Math.min(500,Number(md.value)||1)); };
+    const it=L.kind==='receiver'?rxIteration:iteration;
+    $('iterGo').onclick=()=>go(it);
+    $('runGo').onclick=()=>go(()=>{ let g=0; while(s.now<20 && !s.stuck && g++<2000) it(); });
+  }
+}
+start(0);
+})();
+</script>
+</body>
+</html>
