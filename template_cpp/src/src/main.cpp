@@ -14,6 +14,9 @@
 #include <cerrno>
 #include <cstdio>
 
+// Global variabls
+uint32_t SEQ = 0;
+
 static void stop(int) {
   // reset signal handlers to default
   signal(SIGTERM, SIG_DFL);
@@ -144,18 +147,14 @@ int main(int argc, char **argv) {
       }
     }
   }else{ // sender
-    uint8_t buff[packet::HEADER_SIZE + packet::MSG_SIZE] = {};
-    buff[packet::TYPE_OFFSET] = packet::TYPE_DATA; // type: DATA
-    buff[packet::SENDER_OFFSET] = static_cast<uint8_t>(parser.id()); // sender_id
-    uint32_t seq_value = 1; // 00 00 00 01
-    uint32_t seq_value_net_ordered = htonl(seq_value);
-    std::memcpy(buff + packet::SEQ_OFFSET, &seq_value_net_ordered, packet::SEQ_SIZE);
+    // test packet: messages 1..4, whose payloads are 1..4
+    const uint32_t payloads[] = {1, 2, 3, 4};
+    const size_t msg_count = sizeof(payloads) / sizeof(payloads[0]);
+    uint8_t buf[packet::MAX_PACKET_SIZE];
 
-    uint32_t data_value = 1; // 00 00 00 01
-    uint32_t data_value_net_ordered = htonl(data_value);
-    std::memcpy(buff + packet::PAYLOAD_OFFSET, &data_value_net_ordered, packet::MSG_SIZE);
+    size_t len = packet::encodeData(buf, static_cast<uint8_t>(parser.id()), 1, payloads, msg_count);
 
-    if (sock.send(hosts[config.receiver_id-1], buff, sizeof(buff)) < 0){
+    if (sock.send(hosts[config.receiver_id-1], buf, len) < 0){
       perror("send");
     }
   }

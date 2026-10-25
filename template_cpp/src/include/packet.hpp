@@ -13,7 +13,7 @@ constexpr size_t   TYPE_OFFSET   = 0;
 constexpr size_t   SENDER_OFFSET   = 1;
 constexpr size_t   SENDER_SIZE = 1;
 
-// There two bytes reserved between sender and seq
+// there are two reserved bytes between sender and seq
 
 constexpr size_t   SEQ_OFFSET  = 4;
 constexpr size_t   SEQ_SIZE = 4;
@@ -22,4 +22,11 @@ constexpr size_t   PAYLOAD_OFFSET = HEADER_SIZE;
 constexpr size_t   MSG_SIZE = 4;
 constexpr size_t   MAX_MSGS_PER_PACKET = 8;
 constexpr size_t MAX_PACKET_SIZE = HEADER_SIZE + MAX_MSGS_PER_PACKET * MSG_SIZE;
+
+// buf must hold at least MAX_PACKET_SIZE bytes; returns the packet length, or 0 if n is invalid
+size_t encodeData(uint8_t* buf, uint8_t sender_id, uint32_t first_seq, const uint32_t * payloads, size_t n);
+
+// buf must hold at least HEADER_SIZE bytes; returns HEADER_SIZE
+size_t encodeAck(uint8_t* buf, uint8_t sender_id, uint32_t cumulative_seq);
 }
+
