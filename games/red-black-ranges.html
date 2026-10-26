@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Red-Black Ranges</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#EDF0EB; --surface:#FAFBF8; --sunk:#E3E8E2; --ink:#17201C; --muted:#5B665F; --line:#D2D9D3;
+  --accent:#2D47C9; --accent-ink:#FFFFFF; --red:#C2362B; --black:#1F2723; --path:#E2A84C;
+  --good:#2C7A38; --bad:#BC3324; --warn:#A86C12;
+  --good-bg:#E1F0E2; --bad-bg:#F7E2DE; --warn-bg:#F6ECD8;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+    --accent:#8197FF; --accent-ink:#0C1020; --red:#E2685C; --black:#3A4540; --path:#E2A84C;
+    --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+    --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+  --accent:#8197FF; --accent-ink:#0C1020; --red:#E2685C; --black:#3A4540; --path:#E2A84C;
+  --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+  --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+}
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.5; padding-inline:16px; padding-block:24px 48px}
+.wrap{max-width:1140px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; letter-spacing:-0.01em}
+h1{font-size:clamp(28px,5vw,42px); font-weight:800; line-height:1.05}
+h2{font-size:20px; font-weight:800}
+h3{font-size:15px; font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+button{font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); padding:8px 12px}
+button:hover:not(:disabled){border-color:var(--ink)}
+button:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button:disabled{opacity:.45; cursor:not-allowed}
+button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+input[type=number]{font-family:var(--mono); font-size:14px; width:84px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink)}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:12px}
+.row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.modes{display:flex; gap:6px; flex-wrap:wrap}
+.modes button.cur{border-color:var(--accent); color:var(--accent); font-weight:600}
+.grid{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:18px; align-items:start}
+@media (max-width:900px){ .grid{grid-template-columns:minmax(0,1fr)} }
+.treebox{overflow-x:auto; background:var(--sunk); border:1px solid var(--line); border-radius:12px}
+svg text{font-family:var(--mono)}
+.stats{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px}
+.stat{background:var(--sunk); border:1px solid var(--line); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column}
+.stat b{font-family:var(--display); font-size:22px; font-variant-numeric:tabular-nums; line-height:1.1}
+.stat span{font-size:11.5px; color:var(--muted)}
+.fb{border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:6px; font-size:14px}
+.fb.good{background:var(--good-bg); border:1px solid color-mix(in srgb, var(--good) 40%, transparent)}
+.fb.bad{background:var(--bad-bg); border:1px solid color-mix(in srgb, var(--bad) 45%, transparent)}
+.fb.warn{background:var(--warn-bg); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent)}
+.fb b.h{font-family:var(--display); font-size:16px}
+.ops{font-family:var(--mono); font-size:12.5px; background:var(--sunk); border:1px solid var(--line); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:2px; max-height:240px; overflow:auto}
+.ops .c{color:var(--muted)}
+table{border-collapse:collapse; width:100%; font-size:13px}
+th,td{text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-family:var(--mono); font-size:10.5px; color:var(--muted); font-weight:400; text-transform:uppercase; letter-spacing:.06em}
+td.mono{white-space:nowrap}
+.tbl{overflow-x:auto}
+.line{display:flex; flex-wrap:wrap; gap:3px}
+.sq{font-family:var(--mono); font-size:11px; min-width:30px; text-align:center; padding:4px 2px; border-radius:5px; border:1px solid var(--line); background:var(--surface); color:var(--muted)}
+.sq.del{background:color-mix(in srgb, var(--good) 22%, var(--surface)); border-color:color-mix(in srgb, var(--good) 50%, var(--line)); color:var(--ink)}
+.sq.rng{background:color-mix(in srgb, var(--warn) 24%, var(--surface)); border-color:var(--warn); color:var(--ink)}
+.sq.pkt{outline:2px solid var(--accent); outline-offset:1px}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{font-family:var(--mono); font-size:13px; padding:8px 10px; border-radius:8px; border:1.5px solid var(--line); background:var(--surface); min-width:48px}
+.chip[aria-pressed="true"]{background:var(--good); border-color:var(--good); color:var(--surface)}
+.chip.right{outline:2px solid var(--good); outline-offset:2px}
+.chip.wrong{outline:2px solid var(--bad); outline-offset:2px}
+.legend{display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--muted)}
+.legend i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px}
+.score{font-family:var(--display); font-weight:800; font-size:26px; font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:6px">
+    <span class="eyebrow">std::map&lt;uint32_t, uint32_t&gt; · red-black tree</span>
+    <h1>Red-Black Ranges</h1>
+    <p class="muted" style="max-width:70ch">Your receiver keeps, per sender, a <span class="mono">contiguous</span> counter plus a <span class="mono">std::map</span> from range start to range end. Learn how that map orders its keys and what each operation costs, then run the receiver's bookkeeping yourself.</p>
+  </header>
+
+  <div class="panel">
+    <div class="row" style="justify-content:space-between">
+      <div class="modes" id="modes"><button data-m="tree" class="cur">Tree Navigator</button><button data-m="ranges">Range Keeper</button></div>
+      <div class="row"><span class="eyebrow">score</span><span class="score" id="score">0</span></div>
+    </div>
+  </div>
+
+  <!-- tree navigator -->
+  <section id="treeMode" class="wrap" style="gap:18px">
+    <div class="grid">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between"><h2>The tree inside the map</h2><span class="legend"><span><i style="background:var(--red)"></i>red node</span><span><i style="background:var(--black)"></i>black node</span><span><i style="background:var(--path)"></i>search path</span></span></div>
+        <div class="treebox" id="tree"></div>
+        <div><span class="eyebrow">in-order walk = iterating the map (always sorted)</span><div class="mono" id="inorder" style="font-size:13px;margin-top:4px"></div></div>
+      </div>
+      <div class="wrap" style="gap:16px">
+        <div class="panel" id="navPanel"></div>
+        <div class="panel"><h3>This tree right now</h3><div class="stats" id="tstats"></div></div>
+        <div class="panel">
+          <h3>Do it yourself</h3>
+          <div class="row"><label for="kIn" class="mono" style="font-size:13px">key</label><input type="number" id="kIn" min="1" max="999">
+            <button id="insBtn">insert</button><button id="delBtn">erase</button><button id="findBtn">find</button></div>
+          <div class="row"><button id="seqBtn">Insert keys in order (worst case for a plain BST)</button><button id="clearBtn">Clear</button></div>
+          <div class="ops" id="tops"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>What each operation costs (n = number of keys)</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>operation</th><th>std::map</th><th>why</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">find(k), count(k)</td><td class="mono">O(log n)</td><td>walk one root-to-leaf path; the tree's height stays ≤ 2·log₂(n+1)</td></tr>
+          <tr><td class="mono">insert(k)</td><td class="mono">O(log n)</td><td>find the spot, add a red node, then at most 2 rotations plus recolouring up the path</td></tr>
+          <tr><td class="mono">erase(k)</td><td class="mono">O(log n)</td><td>find it, splice it out, at most 3 rotations to rebalance</td></tr>
+          <tr><td class="mono">erase(iterator)</td><td class="mono">O(1) amortized</td><td>no search needed: you already hold the node</td></tr>
+          <tr><td class="mono">lower_bound(k) / upper_bound(k)</td><td class="mono">O(log n)</td><td>first key ≥ k / &gt; k: one path down. This is how you find a range's neighbours</td></tr>
+          <tr><td class="mono">begin(), ++it, --it</td><td class="mono">O(1) amortized</td><td>smallest key / next / previous in sorted order</td></tr>
+          <tr><td class="mono">iterate everything</td><td class="mono">O(n)</td><td>in-order walk</td></tr>
+        </tbody></table></div>
+      <p class="muted" style="font-size:13px">Ordering comes from comparing keys with <span class="mono">&lt;</span>: smaller keys go left, larger keys go right, at every node. Each node is a separate heap allocation (roughly 48 bytes plus your key and value), so a map is less cache-friendly than a vector. That's the price of cheap sorted inserts and erases. Compare: <span class="mono">std::unordered_map</span> is O(1) on average but has no order; a sorted <span class="mono">std::vector</span> searches in O(log n) but inserts and erases in O(n).</p>
+    </div>
+  </section>
+
+  <!-- range keeper -->
+  <section id="rangeMode" class="wrap" style="gap:18px" hidden>
+    <div class="grid">
+      <div class="wrap" style="gap:16px">
+        <div class="panel">
+          <div class="row" style="justify-content:space-between"><div><span class="eyebrow" id="rRound"></span><h2 id="rTitle"></h2></div></div>
+          <p id="rStory"></p>
+          <div>
+            <span class="eyebrow">sender 3 · seqs <span id="rWin"></span></span>
+            <div class="line" id="rLine" style="margin-top:6px"></div>
+            <div class="legend" style="margin-top:6px"><span><i style="background:var(--good)"></i>≤ contiguous (delivered)</span><span><i style="background:var(--warn)"></i>in a stored range (delivered)</span><span><i style="border:2px solid var(--accent)"></i>in the arriving packet</span></div>
+          </div>
+          <div class="row mono" style="font-size:13.5px;gap:18px"><span>contiguous = <b id="rC"></b></span><span>ranges = <b id="rMap"></b></span></div>
+        </div>
+        <div class="panel" id="rTask"></div>
+      </div>
+      <div class="wrap" style="gap:16px">
+        <div id="rFb"></div>
+        <div class="panel"><h3>The map operations your C++ would run</h3><div class="ops" id="rOps"><span class="c">Answer to see them.</span></div></div>
+        <div class="panel" style="font-size:13.5px">
+          <h3>The rules</h3>
+          <p>A seq is <b>new</b> only if it is <span class="mono">&gt; contiguous</span> and not inside a stored range. Deliver new seqs only, or PL2 breaks.</p>
+          <p>Store the new run as one range, merging with any range it overlaps or touches.</p>
+          <p>If the smallest range now starts at <span class="mono">contiguous + 1</span>, absorb it: <span class="mono">contiguous</span> jumps to its end.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+let score=0; const bump=v=>{ score+=v; $('score').textContent=score; };
+
+/* ================= red-black tree ================= */
+class RB {
+  constructor(){ this.NIL={red:false}; this.NIL.l=this.NIL.r=this.NIL.p=this.NIL; this.root=this.NIL; this.n=0; this.rot=0; }
+  rotL(x){ const y=x.r; x.r=y.l; if(y.l!==this.NIL) y.l.p=x; y.p=x.p; if(x.p===this.NIL) this.root=y; else if(x===x.p.l) x.p.l=y; else x.p.r=y; y.l=x; x.p=y; this.rot++; }
+  rotR(x){ const y=x.l; x.l=y.r; if(y.r!==this.NIL) y.r.p=x; y.p=x.p; if(x.p===this.NIL) this.root=y; else if(x===x.p.r) x.p.r=y; else x.p.l=y; y.r=x; x.p=y; this.rot++; }
+  path(k){ const p=[]; let x=this.root; while(x!==this.NIL){ p.push(x.k); if(k===x.k) break; x = k<x.k? x.l : x.r; } return p; }
+  find(k){ let x=this.root; while(x!==this.NIL && x.k!==k) x = k<x.k? x.l : x.r; return x===this.NIL?null:x; }
+  insert(k){
+    if(this.find(k)) return false;
+    const z={k, red:true, l:this.NIL, r:this.NIL, p:this.NIL}; let y=this.NIL, x=this.root;
+    while(x!==this.NIL){ y=x; x = k<x.k? x.l : x.r; }
+    z.p=y; if(y===this.NIL) this.root=z; else if(k<y.k) y.l=z; else y.r=z;
+    this.n++; this.fixIns(z); return true;
+  }
+  fixIns(z){
+    while(z.p.red){
+      if(z.p===z.p.p.l){ const y=z.p.p.r;
+        if(y.red){ z.p.red=false; y.red=false; z.p.p.red=true; z=z.p.p; }
+        else { if(z===z.p.r){ z=z.p; this.rotL(z); } z.p.red=false; z.p.p.red=true; this.rotR(z.p.p); } }
+      else { const y=z.p.p.l;
+        if(y.red){ z.p.red=false; y.red=false; z.p.p.red=true; z=z.p.p; }
+        else { if(z===z.p.l){ z=z.p; this.rotR(z); } z.p.red=false; z.p.p.red=true; this.rotL(z.p.p); } }
+    }
+    this.root.red=false;
+  }
+  transplant(u,v){ if(u.p===this.NIL) this.root=v; else if(u===u.p.l) u.p.l=v; else u.p.r=v; v.p=u.p; }
+  min(x){ while(x.l!==this.NIL) x=x.l; return x; }
+  erase(k){
+    const z=this.find(k); if(!z) return false;
+    let y=z, yRed=y.red, x;
+    if(z.l===this.NIL){ x=z.r; this.transplant(z,z.r); }
+    else if(z.r===this.NIL){ x=z.l; this.transplant(z,z.l); }
+    else { y=this.min(z.r); yRed=y.red; x=y.r;
+      if(y.p===z) x.p=y; else { this.transplant(y,y.r); y.r=z.r; y.r.p=y; }
+      this.transplant(z,y); y.l=z.l; y.l.p=y; y.red=z.red; }
+    if(!yRed) this.fixDel(x);
+    this.n--; return true;
+  }
+  fixDel(x){
+    while(x!==this.root && !x.red){
+      if(x===x.p.l){ let w=x.p.r;
+        if(w.red){ w.red=false; x.p.red=true; this.rotL(x.p); w=x.p.r; }
+        if(!w.l.red && !w.r.red){ w.red=true; x=x.p; }
+        else { if(!w.r.red){ w.l.red=false; w.red=true; this.rotR(w); w=x.p.r; } w.red=x.p.red; x.p.red=false; w.r.red=false; this.rotL(x.p); x=this.root; } }
+      else { let w=x.p.l;
+        if(w.red){ w.red=false; x.p.red=true; this.rotR(x.p); w=x.p.l; }
+        if(!w.r.red && !w.l.red){ w.red=true; x=x.p; }
+        else { if(!w.l.red){ w.r.red=false; w.red=true; this.rotL(w); w=x.p.l; } w.red=x.p.red; x.p.red=false; w.l.red=false; this.rotR(x.p); x=this.root; } }
+    }
+    x.red=false;
+  }
+  height(x=this.root){ return x===this.NIL?0:1+Math.max(this.height(x.l),this.height(x.r)); }
+  inorder(x=this.root,out=[]){ if(x!==this.NIL){ this.inorder(x.l,out); out.push(x.k); this.inorder(x.r,out);} return out; }
+}
+
+let T=new RB(); let nav=null; let hlPath=[]; const tops=[];
+function topLog(t,c=''){ tops.unshift({t,c}); if(tops.length>40) tops.pop(); }
+[50,30,70,20,40,60,80].forEach(k=>T.insert(k)); T.rot=0;
+
+function drawTree(){
+  const keys=T.inorder(); const pos=new Map(); keys.forEach((k,i)=>pos.set(k,i));
+  const H=Math.max(1,T.height()); const W=Math.max(360,keys.length*46+40), Hh=H*64+40;
+  let edges='', nodes='';
+  const walk=(x,d)=>{ if(x===T.NIL) return; const cx=30+pos.get(x.k)*46, cy=30+d*64;
+    [x.l,x.r].forEach(c=>{ if(c!==T.NIL){ const ex=30+pos.get(c.k)*46, ey=30+(d+1)*64; const onP=hlPath.includes(x.k)&&hlPath.includes(c.k);
+      edges+=`<line x1="${cx}" y1="${cy}" x2="${ex}" y2="${ey}" stroke="${onP?'var(--path)':'var(--line)'}" stroke-width="${onP?3:1.5}"/>`; } walk(c,d+1); });
+    const cur=nav&&nav.at===x.k, inP=hlPath.includes(x.k);
+    nodes+=`<g><circle cx="${cx}" cy="${cy}" r="18" fill="${x.red?'var(--red)':'var(--black)'}" stroke="${cur?'var(--accent)':inP?'var(--path)':'transparent'}" stroke-width="4"/>
+      <text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="12" fill="#FFFFFF">${x.k}</text></g>`; };
+  walk(T.root,0);
+  $('tree').innerHTML=keys.length? `<svg width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}">${edges}${nodes}</svg>` : '<p class="muted" style="padding:16px">Empty map.</p>';
+  $('inorder').textContent=keys.length? keys.join(' < ') : '(empty)';
+  const n=T.n, lg=n?Math.log2(n+1):0;
+  $('tstats').innerHTML=[['keys (n)',n],['height',T.height()],['log₂(n+1)',lg.toFixed(1)],['max allowed height',n?(2*lg).toFixed(1):0],['rotations so far',T.rot]]
+    .map(([l,v])=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  $('tops').innerHTML=tops.map(o=>`<span class="${o.c}">${o.t}</span>`).join('')||'<span class="c">Your operations show up here.</span>';
+}
+function newNav(){
+  const ex=new Set(T.inorder()); let k; do{ k=1+Math.floor(Math.random()*99); }while(ex.has(k));
+  nav={k, at:T.root===T.NIL?null:T.root.k, steps:0, wrong:0, done:false}; hlPath=[]; renderNav(); drawTree();
+}
+function renderNav(){
+  if(!nav) return;
+  if(nav.done){
+    $('navPanel').innerHTML=`<span class="eyebrow">challenge · find the spot</span><h2>Inserted ${nav.k}</h2>
+      <div class="fb ${nav.wrong?'warn':'good'}"><b class="h">${nav.steps} comparisons${nav.wrong?`, ${nav.wrong} wrong turn${nav.wrong>1?'s':''}`:', no wrong turns'}</b>
+      <span>That's the O(log n): with ${T.n} keys, a search compares against at most about ${T.height()} keys, one per level. ${nav.rot?`Inserting it then took <b>${nav.rot} rotation${nav.rot>1?'s':''}</b> to keep the tree balanced.`:'No rotation was needed this time, only recolouring.'}</span></div>
+      <div class="row"><button class="primary" id="navNext">Next key</button></div>`;
+    $('navNext').onclick=newNav; return;
+  }
+  const atNode=nav.at!==null;
+  $('navPanel').innerHTML=`<span class="eyebrow">challenge · find the spot</span><h2>Where does ${nav.k} go?</h2>
+    <p class="muted" style="font-size:13.5px">${atNode?`You're at <b class="mono">${nav.at}</b> (blue ring). Compare ${nav.k} with ${nav.at}.`:'Empty tree: it becomes the root.'}</p>
+    <div class="row">${atNode?`<button id="goL">← smaller, go left</button><button id="goR">larger, go right →</button>`:`<button class="primary" id="goRoot">Make it the root</button>`}</div>`;
+  if(atNode){ $('goL').onclick=()=>step('l'); $('goR').onclick=()=>step('r'); } else $('goRoot').onclick=()=>finish();
+}
+function step(dir){
+  const x=T.find(nav.at); const right = nav.k<x.k? 'l':'r';
+  nav.steps++; hlPath.push(x.k);
+  if(dir!==right){ nav.wrong++; bump(-2); topLog(`✕ ${nav.k} ${nav.k<x.k?'<':'>'} ${x.k}: go ${right==='l'?'left':'right'}`,''); }
+  else bump(2);
+  const nxt = right==='l'? x.l : x.r;
+  if(nxt===T.NIL){ finish(); return; }
+  nav.at=nxt.k; renderNav(); drawTree();
+}
+function finish(){ const r0=T.rot; T.insert(nav.k); nav.rot=T.rot-r0; nav.done=true; nav.at=null; topLog(`insert(${nav.k}): ${nav.steps} comparisons, ${nav.rot} rotations`); renderNav(); drawTree(); }
+
+$('insBtn').onclick=()=>{ const k=Number($('kIn').value); if(!k) return; hlPath=T.path(k); const r0=T.rot; const ok=T.insert(k); topLog(ok?`insert(${k}): ${hlPath.length} comparisons, ${T.rot-r0} rotations`:`insert(${k}): already present (map keys are unique)`); drawTree(); };
+$('delBtn').onclick=()=>{ const k=Number($('kIn').value); if(!k) return; hlPath=T.path(k); const r0=T.rot; const ok=T.erase(k); topLog(ok?`erase(${k}): ${hlPath.length} comparisons to find it, ${T.rot-r0} rotations`:`erase(${k}): not found`); drawTree(); };
+$('findBtn').onclick=()=>{ const k=Number($('kIn').value); if(!k) return; hlPath=T.path(k); topLog(`find(${k}): ${T.find(k)?'found':'not found'} after ${hlPath.length} comparisons`); drawTree(); };
+$('seqBtn').onclick=()=>{ T=new RB(); for(let k=1;k<=31;k++) T.insert(k); hlPath=[]; topLog(`inserted 1..31 in order: height ${T.height()} (a plain BST would be a 31-node chain), ${T.rot} rotations`); newNav(); };
+$('clearBtn').onclick=()=>{ T=new RB(); hlPath=[]; topLog('cleared'); newNav(); };
+
+/* ================= range keeper ================= */
+const CURATED=[
+  {t:'Old news', story:'A late retransmission of messages you delivered long ago.', c:40, r:[[44,49],[51,53]], p:[35,38]},
+  {t:'Fast path', story:'The next packet, exactly in order. This is the common case in the performance tests.', c:40, r:[], p:[41,48]},
+  {t:'A gap opens', story:'Packet 41–43 was lost, so this one lands beyond a gap.', c:40, r:[], p:[44,49]},
+  {t:'Overlap', story:'A retransmission overlapping a range you already hold.', c:40, r:[[44,49],[51,53]], p:[50,55]},
+  {t:'Gap filled', story:'The missing packet finally arrives.', c:40, r:[[44,49],[51,53]], p:[41,43]},
+  {t:'Messy retransmission', story:'A retransmission with different boundaries: part old, part new, part already stored.', c:40, r:[[44,49],[51,53]], p:[38,45]},
+];
+let R, rIdx=0;
+function mapStr(r){ return r.length? '{'+r.map(([a,b])=>`${a}→${b}`).join(', ')+'}' : '{}'; }
+function covered(c,r,s){ return s<=c || r.some(([a,b])=>s>=a&&s<=b); }
+function solve(c,ranges,first,last){
+  // mirrors the C++: returns new seqs, next state and the map operations performed
+  const ops=[], r=ranges.map(x=>[...x]); const fresh=[];
+  for(let s=first;s<=last;s++) if(!covered(c,r,s)) fresh.push(s);
+  if(last<=c){ ops.push(`last ${last} ≤ contiguous ${c}: everything is old, no map access`); return {fresh, c, r, ops}; }
+  let lo=Math.max(first,c+1);
+  if(lo>first) ops.push(`clip: seqs ≤ ${c} are old, keep ${lo}–${last}`);
+  if(lo===c+1 && (r.length===0 || r[0][0]>last+1)){
+    ops.push(`fast path: ${lo} == contiguous + 1 and no range touches ${last+1}: contiguous = ${last}, no map access`);
+    return {fresh, c:last, r, ops};
+  }
+  let s=lo, e=last;
+  ops.push(`it = upper_bound(${s}) → ${r.find(([a])=>a>s)?r.find(([a])=>a>s)[0]+'→'+r.find(([a])=>a>s)[1]:'end()'}   O(log n)`);
+  const keep=[];
+  for(const [a,b] of r){
+    if(b>=s-1 && a<=e+1){ ops.push(`range ${a}→${b} overlaps or touches ${s}–${e}: merge it, erase(it)   O(1) amortized`); s=Math.min(s,a); e=Math.max(e,b); }
+    else keep.push([a,b]);
+  }
+  keep.push([s,e]); keep.sort((x,y)=>x[0]-y[0]);
+  ops.push(`insert(${s} → ${e})   O(log n)`);
+  let nc=c;
+  if(keep.length && keep[0][0]===nc+1){ ops.push(`begin() is ${keep[0][0]}→${keep[0][1]}, starting at contiguous + 1: contiguous = ${keep[0][1]}, erase(begin())   O(1) amortized`); nc=keep[0][1]; keep.shift(); }
+  return {fresh, c:nc, r:keep, ops};
+}
+function randomRound(){
+  let c=20+Math.floor(Math.random()*30); const r=[]; let x=c+2+Math.floor(Math.random()*3);
+  const nr=Math.floor(Math.random()*3);
+  for(let i=0;i<nr;i++){ const len=1+Math.floor(Math.random()*6); r.push([x,x+len-1]); x+=len+1+Math.floor(Math.random()*4); }
+  const k=1+Math.floor(Math.random()*8); const first=c-3+Math.floor(Math.random()*(x-c+4));
+  return {t:'Random packet', story:'A packet from sender 3. Who knows what it overlaps.', c, r, p:[first, first+k-1]};
+}
+function startRound(){
+  const base = rIdx<CURATED.length? CURATED[rIdx] : randomRound();
+  R={...base, r:base.r.map(x=>[...x]), pick:new Set(), done:false};
+  R.sol=solve(R.c,R.r,R.p[0],R.p[1]);
+  renderRange();
+}
+function renderRange(){
+  $('rRound').textContent = rIdx<CURATED.length? `round ${rIdx+1} of ${CURATED.length}` : 'endless mode';
+  $('rTitle').textContent=R.t; $('rStory').textContent=R.story;
+  const c=R.done?R.sol.c:R.c, r=R.done?R.sol.r:R.r;
+  const lo=Math.max(1,Math.min(R.c,R.p[0])-3), hi=Math.max(R.p[1], ...(R.r.length?R.r.map(x=>x[1]):[R.c]))+3;
+  $('rWin').textContent=`${lo}–${hi}`;
+  let h=''; for(let s=lo;s<=hi;s++){ const cls= s<=c?'del': r.some(([a,b])=>s>=a&&s<=b)?'rng':''; const inP=s>=R.p[0]&&s<=R.p[1]; h+=`<span class="sq ${cls} ${inP?'pkt':''}">${s}</span>`; }
+  $('rLine').innerHTML=h; $('rC').textContent=c; $('rMap').textContent=mapStr(r);
+  const seqs=[]; for(let s=R.p[0];s<=R.p[1];s++) seqs.push(s);
+  if(!R.done){
+    $('rTask').innerHTML=`<h3>DATA packet arrives: seqs ${R.p[0]}–${R.p[1]} (k = ${seqs.length})</h3>
+      <p class="muted" style="font-size:13.5px">Tap every seq you would <b>deliver</b> (log as <span class="mono">d 3 seq</span>). Leave the old ones. Then predict the new contiguous.</p>
+      <div class="chips">${seqs.map(s=>`<button class="chip" data-s="${s}" aria-pressed="${R.pick.has(s)}">${s}</button>`).join('')}</div>
+      <div class="row"><label for="cIn" class="mono" style="font-size:13px">new contiguous =</label><input type="number" id="cIn" value="${R.c}"><button class="primary" id="rGo">Check</button></div>`;
+    $('rTask').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{ const s=Number(b.dataset.s); R.pick.has(s)?R.pick.delete(s):R.pick.add(s); b.setAttribute('aria-pressed',R.pick.has(s)); });
+    $('rGo').onclick=check; $('rFb').innerHTML=''; $('rOps').innerHTML='<span class="c">Answer to see them.</span>';
+  } else {
+    const fr=new Set(R.sol.fresh);
+    $('rTask').innerHTML=`<h3>Seqs ${R.p[0]}–${R.p[1]}</h3><div class="chips">${seqs.map(s=>`<span class="chip ${fr.has(s)===R.pick.has(s)?'right':'wrong'}" aria-pressed="${fr.has(s)}">${s}</span>`).join('')}</div>
+      <p class="muted" style="font-size:12.5px">Filled = should be delivered. Green ring = you got it right, red ring = you got it wrong.</p>
+      <div class="row"><button class="primary" id="rNext">${rIdx<CURATED.length-1?'Next round →':'Next packet →'}</button></div>`;
+    $('rNext').onclick=()=>{ rIdx++; startRound(); };
+    $('rOps').innerHTML=R.sol.ops.map(o=>`<span>${o}</span>`).join('');
+  }
+}
+function check(){
+  const fr=new Set(R.sol.fresh); const cGuess=Number($('cIn').value);
+  const dup=[...R.pick].filter(s=>!fr.has(s)), miss=[...fr].filter(s=>!R.pick.has(s)), cOk=cGuess===R.sol.c;
+  R.done=true;
+  const ok=!dup.length && !miss.length && cOk; bump(ok?10:-5);
+  const lines=[];
+  if(dup.length) lines.push(`<b>Delivered twice:</b> ${dup.join(', ')}. Already ≤ contiguous or inside a stored range: PL2 violation.`);
+  if(miss.length) lines.push(`<b>Never delivered:</b> ${miss.join(', ')}. They were new; after this packet your state says you have them, so they are lost for good: PL1 violation.`);
+  if(!cOk) lines.push(`Contiguous should be <b>${R.sol.c}</b>, not ${cGuess}.`);
+  if(ok) lines.push(R.sol.fresh.length?`Deliver ${R.sol.fresh.join(', ')}. Contiguous ${R.sol.c===R.c?'stays':'becomes'} ${R.sol.c}, map is ${mapStr(R.sol.r)}.`:'Nothing new: drop it, but still ACK so the sender stops retransmitting.');
+  $('rFb').innerHTML=`<div class="fb ${ok?'good':'bad'}"><b class="h">${ok?'Correct':'Not quite'}</b>${lines.map(l=>`<span>${l}</span>`).join('')}</div>`;
+  renderRange();
+}
+
+/* ================= modes ================= */
+$('modes').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  $('modes').querySelectorAll('button').forEach(x=>x.classList.toggle('cur',x===b));
+  $('treeMode').hidden=b.dataset.m!=='tree'; $('rangeMode').hidden=b.dataset.m!=='ranges';
+});
+newNav(); startRound();
+})();
+</script>
+</body>
+</html>
