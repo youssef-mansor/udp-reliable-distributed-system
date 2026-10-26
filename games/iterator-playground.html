@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iterator Playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#EDF0EB; --surface:#FAFBF8; --sunk:#E3E8E2; --ink:#17201C; --muted:#5B665F; --line:#D2D9D3;
+  --accent:#2D47C9; --accent-ink:#FFFFFF; --key:#1D8577; --val:#8A3D8E;
+  --good:#2C7A38; --bad:#BC3324; --warn:#A86C12;
+  --good-bg:#E1F0E2; --bad-bg:#F7E2DE; --warn-bg:#F6ECD8;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+    --accent:#8197FF; --accent-ink:#0C1020; --key:#4BC3B1; --val:#CB80CF;
+    --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+    --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+  --accent:#8197FF; --accent-ink:#0C1020; --key:#4BC3B1; --val:#CB80CF;
+  --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+  --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+}
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.5; padding-inline:16px; padding-block:24px 48px}
+.wrap{max-width:1140px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; letter-spacing:-0.01em}
+h1{font-size:clamp(28px,5vw,42px); font-weight:800; line-height:1.05}
+h2{font-size:20px; font-weight:800}
+h3{font-size:15px; font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+button{font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); padding:7px 11px}
+button:hover:not(:disabled){border-color:var(--ink)}
+button:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button:disabled{opacity:.45; cursor:not-allowed}
+button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+button.op{font-family:var(--mono); font-size:12.5px; text-align:left}
+input[type=number]{font-family:var(--mono); font-size:14px; width:72px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink)}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:12px}
+.row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.tabs{display:flex; flex-wrap:wrap; gap:6px}
+.tabs button{font-size:13px; padding:6px 11px}
+.tabs button.cur{border-color:var(--accent); color:var(--accent); font-weight:600}
+.tabs button.won::after{content:" ✓"; color:var(--good)}
+.grid{display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:18px; align-items:start}
+@media (max-width:900px){ .grid{grid-template-columns:minmax(0,1fr)} }
+.mapview{overflow-x:auto; padding:6px 2px 4px}
+.cells{display:flex; gap:10px; align-items:flex-end; width:max-content; padding-top:34px; position:relative}
+.cell{position:relative; display:flex; flex-direction:column; align-items:center; gap:4px}
+.box{display:flex; border-radius:10px; overflow:hidden; border:2px solid var(--line); font-family:var(--mono); font-size:14px; background:var(--surface)}
+.box span{padding:8px 10px}
+.box .k{background:color-mix(in srgb, var(--key) 18%, var(--surface)); color:var(--ink)}
+.box .v{background:color-mix(in srgb, var(--val) 16%, var(--surface)); color:var(--ink); border-left:1px solid var(--line)}
+.box.endbox{border-style:dashed; color:var(--muted); padding:8px 12px; background:transparent}
+.cell.clickable .box{cursor:pointer}
+.cell.clickable .box:hover{border-color:var(--accent)}
+.cell .idx{font-family:var(--mono); font-size:10.5px; color:var(--muted)}
+.arrow{position:absolute; top:-32px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent); white-space:nowrap; display:flex; flex-direction:column; align-items:center; line-height:1.1}
+.arrow.dang{color:var(--bad)}
+.cell.hit .box{border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent)}
+.cell.right .box{border-color:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent)}
+.cell.wrong .box{border-color:var(--bad); box-shadow:0 0 0 3px color-mix(in srgb, var(--bad) 25%, transparent)}
+.vars{display:flex; flex-wrap:wrap; gap:14px; font-family:var(--mono); font-size:13.5px}
+.vars b{font-weight:600}
+.ops{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:6px}
+.opgroup{display:flex; flex-direction:column; gap:6px}
+.opgroup .lab{font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.code{font-family:var(--mono); font-size:12.5px; background:var(--sunk); border:1px solid var(--line); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:1px; max-height:280px; overflow:auto}
+.code div{white-space:pre-wrap}
+.code .r{color:var(--muted)} .code .ub{color:var(--bad); font-weight:600}
+.fb{border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:6px; font-size:14px}
+.fb.good{background:var(--good-bg); border:1px solid color-mix(in srgb, var(--good) 40%, transparent)}
+.fb.bad{background:var(--bad-bg); border:1px solid color-mix(in srgb, var(--bad) 45%, transparent)}
+.fb.warn{background:var(--warn-bg); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent)}
+.fb b.h{font-family:var(--display); font-size:16px}
+.fb pre{font-family:var(--mono); font-size:12.5px; margin:0; white-space:pre-wrap}
+.score{font-family:var(--display); font-weight:800; font-size:26px; font-variant-numeric:tabular-nums}
+.cheat td:first-child{font-family:var(--mono); white-space:nowrap}
+table{border-collapse:collapse; width:100%; font-size:13px}
+td{padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top}
+.tbl{overflow-x:auto}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:6px">
+    <span class="eyebrow">std::map iterators, hands on</span>
+    <h1>Iterator Playground</h1>
+    <p class="muted" style="max-width:70ch">Your ranges map, drawn as sorted boxes of <span class="mono">start → end</span>, plus the invisible <span class="mono">end()</span> slot after the last one. Move the iterator <span class="mono">it</span> with real map calls, read through it, change the map, and watch the C++ you are writing appear line by line. Step off the map and you get undefined behaviour.</p>
+  </header>
+
+  <div class="panel">
+    <div class="row" style="justify-content:space-between">
+      <div class="tabs" id="tabs"></div>
+      <div class="row"><span class="eyebrow">score</span><span class="score" id="score">0</span></div>
+    </div>
+    <div id="brief"></div>
+  </div>
+
+  <div class="grid">
+    <div class="wrap" style="gap:16px">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between"><h3 class="mono">std::map&lt;uint32_t, uint32_t&gt; ranges</h3><span class="muted mono" style="font-size:12px" id="size"></span></div>
+        <div class="mapview"><div class="cells" id="cells"></div></div>
+        <div class="vars" id="vars"></div>
+      </div>
+      <div class="panel" id="opsPanel">
+        <div class="row"><span class="mono" style="font-size:13px">x =</span><input type="number" id="xIn" value="51"><span class="mono" style="font-size:13px">y =</span><input type="number" id="yIn" value="55"><span class="muted" style="font-size:12.5px">arguments for the calls below</span></div>
+        <div class="ops" id="ops"></div>
+      </div>
+    </div>
+    <div class="wrap" style="gap:16px">
+      <div id="fb"></div>
+      <div class="panel"><div class="row" style="justify-content:space-between"><h3>The C++ you've written</h3><button id="reset" style="font-size:12.5px">Reset challenge</button></div><div class="code" id="code"></div></div>
+      <div class="panel cheat">
+        <h3>Cheat sheet</h3>
+        <div class="tbl"><table><tbody>
+          <tr><td>begin()</td><td>the smallest key</td></tr>
+          <tr><td>end()</td><td>one past the last entry: a stop marker. Never read through it</td></tr>
+          <tr><td>lower_bound(x)</td><td>first key ≥ x</td></tr>
+          <tr><td>upper_bound(x)</td><td>first key &gt; x</td></tr>
+          <tr><td>find(x)</td><td>the key x exactly, or end()</td></tr>
+          <tr><td>it-&gt;first / it-&gt;second</td><td>key (start) / value (end). The key is read-only</td></tr>
+          <tr><td>it = ranges.erase(it)</td><td>removes the entry and returns the next one. The old it is dead</td></tr>
+          <tr><td>insert({x, y})</td><td>adds x → y, but does nothing if key x already exists</td></tr>
+          <tr><td>ranges[x] = y</td><td>adds or overwrites</td></tr>
+        </tbody></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+let score=0; const won={};
+const END='END';
+const CH=[
+ { id:'quiz', name:'Where does it point?', kind:'quiz', map:[[44,49],[51,53],[60,62]],
+   brief:'Click the box each call returns. Use the dashed end() box when it returns end().',
+   qs:[ {q:'ranges.begin()', a:44}, {q:'ranges.lower_bound(51)', a:51}, {q:'ranges.upper_bound(51)', a:60},
+        {q:'ranges.lower_bound(52)', a:60}, {q:'ranges.upper_bound(62)', a:END}, {q:'ranges.find(50)', a:END}, {q:'ranges.upper_bound(10)', a:44} ],
+   solution:'lower_bound(x): first key ≥ x.  upper_bound(x): first key > x.\nBoth return end() when no key qualifies; find(x) returns end() when x is not a key.' },
+ { id:'inside', name:'Is it inside?', kind:'inside', map:[[44,49],[51,53],[60,62]], seqs:[52,50,44,30,70],
+   brief:'Decide whether each seq lies inside a stored range, the way inRanges() does: upper_bound(seq), check for begin(), step back, compare with it->second. Then press your verdict.',
+   solution:'auto it = ranges.upper_bound(seq);\nif (it == ranges.begin()) return false;\n--it;\nreturn seq <= it->second;' },
+ { id:'merge', name:'Merge 50–55', kind:'goal', map:[[44,49],[51,53],[60,62]], c:40,
+   brief:'A packet with seqs 50–55 arrives. Fold it into the map so that every overlapping or touching range becomes one. Target: <span class="mono">{44→55, 60→62}</span>.',
+   goal:s=>eqMap(s.map,[[44,55],[60,62]]),
+   solution:'auto it = ranges.upper_bound(50);   // 51→53\n--it;                                 // 44→49 ends at 49 = 50 − 1: touches\nuint32_t lo = it->first;              // 44\nuint32_t hi = std::max(it->second, 55u);\nit = ranges.erase(it);                // now at 51→53\nwhile (it != ranges.end() && it->first <= 55 + 1) {\n  hi = std::max(hi, it->second);\n  it = ranges.erase(it);\n}\nranges.insert({lo, hi});              // 44→55' },
+ { id:'extend', name:'Extend in place', kind:'goal', map:[[44,49],[60,62]], c:40,
+   brief:'Seqs 50–52 arrive. They touch the end of 44→49 and nothing else. Make the map <span class="mono">{44→52, 60→62}</span> without erasing anything: values can be changed through the iterator.',
+   goal:s=>eqMap(s.map,[[44,52],[60,62]]) && s.erases===0,
+   solution:'auto it = ranges.upper_bound(50);   // 60→62\n--it;                                 // 44→49\nit->second = 52;                      // O(1): the value is writable, the key is not' },
+ { id:'absorb', name:'Absorb', kind:'goal', map:[[41,49],[51,53]], c:40,
+   brief:'The gap before 41 is closed: contiguous is 40 and the smallest range starts at 41. Move it into contiguous. Target: <span class="mono">contiguous = 49</span> and map <span class="mono">{51→53}</span>.',
+   goal:s=>s.c===49 && eqMap(s.map,[[51,53]]),
+   solution:'auto it = ranges.begin();\nif (it != ranges.end() && it->first == contiguous + 1) {\n  contiguous = it->second;   // 49\n  ranges.erase(it);\n}' },
+ { id:'free', name:'Sandbox', kind:'free', map:[[44,49],[51,53],[60,62]], c:40,
+   brief:'No goal. Try anything, including the things that are undefined behaviour, and see what the game says.' },
+];
+let C, s;
+function eqMap(a,b){ return a.length===b.length && a.every((x,i)=>x[0]===b[i][0]&&x[1]===b[i][1]); }
+function start(i){
+  C=CH[i];
+  s={ map:C.map.map(x=>[...x]), it:null, dangling:false, code:[], c:C.c, erases:0, done:false, ub:0, qi:0, qWrong:0, si:0, sWrong:0, last:null, quizPick:null };
+  if(C.kind==='inside') s.code.push({t:`// seq = ${C.seqs[0]}`, cls:'r'});
+  if(C.kind==='inside') setTimeout(()=>{ $('xIn').value=C.seqs[0]; });
+  render();
+}
+function idx(key){ return key===END? s.map.length : s.map.findIndex(x=>x[0]===key); }
+function at(){ return s.it===null||s.it===END? null : s.map[idx(s.it)]; }
+function emit(t,res,cls=''){ s.code.push({t:t+(res!==undefined?`   // → ${res}`:''), cls}); }
+function ub(t,why){ s.ub++; score-=5; s.code.push({t:`${t}   // UNDEFINED BEHAVIOUR: ${why}`, cls:'ub'}); s.fb={cls:'bad', h:'Undefined behaviour', b:why+' In real C++ this may crash, return garbage, or appear to work and corrupt memory later.'}; }
+function itName(){ if(s.it===null) return 'uninitialized'; if(s.it===END) return 'end()'; return `${s.it}→${s.map[idx(s.it)][1]}`; }
+function needIt(t){
+  if(s.it===null){ ub(t,'it was never assigned.'); return false; }
+  if(s.dangling){ ub(t,'it still points at an erased entry. Use the return value: it = ranges.erase(it).'); return false; }
+  return true;
+}
+const X=()=>Number($('xIn').value), Y=()=>Number($('yIn').value);
+function firstGE(x){ const e=s.map.find(e=>e[0]>=x); return e?e[0]:END; }
+function firstGT(x){ const e=s.map.find(e=>e[0]>x); return e?e[0]:END; }
+
+const OPS=[
+ {g:'move it', l:'it = ranges.begin();', f:()=>{ s.it=s.map.length?s.map[0][0]:END; s.dangling=false; emit('it = ranges.begin();', itName()); }},
+ {g:'move it', l:'it = ranges.end();', f:()=>{ s.it=END; s.dangling=false; emit('it = ranges.end();', 'end()'); }},
+ {g:'move it', l:'it = ranges.lower_bound(x);', f:()=>{ const x=X(); s.it=firstGE(x); s.dangling=false; emit(`it = ranges.lower_bound(${x});`, itName()); }},
+ {g:'move it', l:'it = ranges.upper_bound(x);', f:()=>{ const x=X(); s.it=firstGT(x); s.dangling=false; emit(`it = ranges.upper_bound(${x});`, itName()); }},
+ {g:'move it', l:'it = ranges.find(x);', f:()=>{ const x=X(); s.it=idx(x)>=0?x:END; s.dangling=false; emit(`it = ranges.find(${x});`, itName()); }},
+ {g:'move it', l:'++it;', f:()=>{ if(!needIt('++it;')) return; if(s.it===END) return ub('++it;','incrementing end(): there is nothing after it.'); const i=idx(s.it)+1; s.it=i<s.map.length?s.map[i][0]:END; emit('++it;', itName()); }},
+ {g:'move it', l:'--it;', f:()=>{ if(!needIt('--it;')) return; const i=idx(s.it); if(i===0) return ub('--it;','decrementing begin(): there is nothing before it. Check it == ranges.begin() first.'); s.it=s.map[i-1][0]; emit('--it;', itName()); }},
+ {g:'read & compare', l:'it->first', f:()=>{ if(!needIt('it->first')) return; if(s.it===END) return ub('auto v = it->first;','reading through end(), which points at no entry.'); s.last=s.it; emit('auto v = it->first;', s.it); }},
+ {g:'read & compare', l:'it->second', f:()=>{ if(!needIt('it->second')) return; if(s.it===END) return ub('auto v = it->second;','reading through end(), which points at no entry.'); s.last=at()[1]; emit('auto v = it->second;', at()[1]); }},
+ {g:'read & compare', l:'it == ranges.begin()', f:()=>{ if(!needIt('it == ranges.begin()')) return; const r= s.map.length? s.it===s.map[0][0] : s.it===END; emit('it == ranges.begin()', String(r)); }},
+ {g:'read & compare', l:'it == ranges.end()', f:()=>{ if(!needIt('it == ranges.end()')) return; emit('it == ranges.end()', String(s.it===END)); }},
+ {g:'read & compare', l:'ranges.empty()', f:()=>{ emit('ranges.empty()', String(!s.map.length)); }},
+ {g:'change the map', l:'it->second = y;', f:()=>{ if(!needIt('it->second = y;')) return; if(s.it===END) return ub(`it->second = ${Y()};`,'writing through end().'); at()[1]=Y(); emit(`it->second = ${Y()};`, itName()); }},
+ {g:'change the map', l:'it = ranges.erase(it);', f:()=>{ if(!needIt('it = ranges.erase(it);')) return; if(s.it===END) return ub('it = ranges.erase(it);','erasing end().'); const i=idx(s.it); s.map.splice(i,1); s.erases++; s.it=i<s.map.length?s.map[i][0]:END; emit('it = ranges.erase(it);', `now at ${itName()}`); }},
+ {g:'change the map', l:'ranges.erase(it);', f:()=>{ if(!needIt('ranges.erase(it);')) return; if(s.it===END) return ub('ranges.erase(it);','erasing end().'); const k=s.it; s.map.splice(idx(k),1); s.erases++; s.dangling=true; emit('ranges.erase(it);', `erased ${k}; it is now dangling`); }},
+ {g:'change the map', l:'ranges.insert({x, y});', f:()=>{ const x=X(), y=Y(); if(idx(x)>=0){ emit(`ranges.insert({${x}, ${y}});`, `key ${x} exists: nothing changed`); s.fb={cls:'warn', h:'insert() did nothing', b:`Key ${x} is already in the map, and insert never overwrites. Use ranges[${x}] = ${y}, or it->second = ${y}.`}; return; } s.map.push([x,y]); s.map.sort((a,b)=>a[0]-b[0]); emit(`ranges.insert({${x}, ${y}});`, 'inserted'); }},
+ {g:'change the map', l:'ranges[x] = y;', f:()=>{ const x=X(), y=Y(); const i=idx(x); if(i>=0) s.map[i][1]=y; else { s.map.push([x,y]); s.map.sort((a,b)=>a[0]-b[0]); } emit(`ranges[${x}] = ${y};`, i>=0?'overwritten':'inserted'); }},
+ {g:'change the map', l:'contiguous = it->second;', f:()=>{ if(!needIt('contiguous = it->second;')) return; if(s.it===END) return ub('contiguous = it->second;','reading through end().'); s.c=at()[1]; emit('contiguous = it->second;', s.c); }},
+];
+
+function renderMap(){
+  const cells=[...s.map.map(e=>({k:e[0],v:e[1]})), {k:END}];
+  const quiz=C.kind==='quiz' && !s.done;
+  $('cells').innerHTML=cells.map((e,i)=>{
+    const isIt = s.it!==null && ((e.k===END && s.it===END) || e.k===s.it);
+    let cls=''; if(isIt) cls+=' hit';
+    if(C.kind==='quiz' && s.quizPick!==null && s.quizShow){ const ans=C.qs[s.qi].a; if(e.k===ans) cls+=' right'; else if(e.k===s.quizPick) cls+=' wrong'; }
+    const arrow= isIt? `<span class="arrow ${s.dangling?'dang':''}">${s.dangling?'it (dangling)':'it'}<span>▼</span></span>` : '';
+    const box= e.k===END? `<div class="box endbox">end()</div>` : `<div class="box"><span class="k">${e.k}</span><span class="v">${e.v}</span></div>`;
+    return `<div class="cell ${quiz?'clickable':''} ${cls}" data-k="${e.k}">${arrow}${box}<span class="idx">${e.k===END?'past the last':i===0?'begin()':''}</span></div>`;
+  }).join('');
+  if(quiz) $('cells').querySelectorAll('.cell').forEach(c=>c.onclick=()=>quizPick(c.dataset.k===END?END:Number(c.dataset.k)));
+  $('size').textContent=`size() = ${s.map.length}`;
+  const v=[`<span>it = <b>${s.dangling?'dangling':itName()}</b></span>`];
+  if(s.c!==undefined) v.push(`<span>contiguous = <b>${s.c}</b></span>`);
+  if(s.last!==null) v.push(`<span>last read v = <b>${s.last}</b></span>`);
+  $('vars').innerHTML=v.join('');
+}
+function renderBrief(){
+  let h=`<h2>${C.name}</h2><p>${C.brief}</p>`;
+  if(C.kind==='quiz' && !s.done) h+=`<p class="mono" style="font-size:16px">question ${s.qi+1}/${C.qs.length}: where does <b>${C.qs[s.qi].q}</b> point?</p>`;
+  if(C.kind==='inside' && !s.done) h+=`<div class="row"><span class="mono" style="font-size:16px">seq = <b>${C.seqs[s.si]}</b> (${s.si+1}/${C.seqs.length})</span><button class="primary" id="vIn">inside a range</button><button id="vOut">not inside</button></div>`;
+  $('brief').innerHTML=h;
+  if($('vIn')){ $('vIn').onclick=()=>verdict(true); $('vOut').onclick=()=>verdict(false); }
+}
+function render(){
+  $('tabs').innerHTML=CH.map((c,i)=>`<button data-i="${i}" class="${c===C?'cur':''} ${won[c.id]?'won':''}">${c.name}</button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>start(Number(b.dataset.i)));
+  $('score').textContent=score;
+  renderBrief(); renderMap();
+  $('opsPanel').hidden = C.kind==='quiz';
+  const groups=[...new Set(OPS.map(o=>o.g))];
+  $('ops').innerHTML=groups.map(g=>`<div class="opgroup"><span class="lab">${g}</span>${OPS.map((o,i)=>o.g===g && (o.l!=='contiguous = it->second;' || s.c!==undefined)?`<button class="op" data-o="${i}" ${s.done&&C.kind!=='free'?'disabled':''}>${o.l}</button>`:'').join('')}</div>`).join('');
+  $('ops').querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>{ s.fb=null; OPS[Number(b.dataset.o)].f(); afterOp(); });
+  $('code').innerHTML=s.code.length? s.code.map(c=>`<div class="${c.cls}">${c.t.replace(/</g,'&lt;')}</div>`).join('') : '<div class="r">// click a call to start writing</div>';
+  $('code').scrollTop=$('code').scrollHeight;
+  let fb=s.fb? `<div class="fb ${s.fb.cls}"><b class="h">${s.fb.h}</b><span>${s.fb.b}</span>${s.fb.sol?`<pre>${s.fb.sol.replace(/</g,'&lt;')}</pre>`:''}${s.fb.next?'<div class="row"><button class="primary" id="nextC">Next challenge →</button></div>':''}</div>` : '';
+  $('fb').innerHTML=fb;
+  const n=$('nextC'); if(n) n.onclick=()=>start(Math.min(CH.length-1, CH.indexOf(C)+1));
+}
+function afterOp(){
+  if(C.kind==='goal' && !s.done && C.goal(s)){
+    s.done=true; const clean=s.ub===0; score+= clean?20:10; won[C.id]=true;
+    s.fb={cls:clean?'good':'warn', h: clean?'Goal reached':'Goal reached, but with undefined behaviour along the way', b:`You used ${s.code.filter(c=>c.cls!=='r').length} lines. A compact version:`, sol:C.solution, next:true};
+  }
+  render();
+}
+function quizPick(k){
+  if(s.quizShow){ return; }
+  const q=C.qs[s.qi]; s.quizPick=k; s.quizShow=true;
+  const ok=k===q.a; if(ok) score+=3; else { score-=2; s.qWrong++; }
+  s.code.push({t:`it = ${q.q};   // → ${q.a===END?'end()':q.a}${ok?'':'  (you picked '+(k===END?'end()':k)+')'}`, cls: ok?'':'ub'});
+  s.it=q.a;
+  s.fb={cls:ok?'good':'bad', h: ok?'Right':'Not that one', b: explainQ(q)};
+  render();
+  setTimeout(()=>{ s.quizShow=false; s.quizPick=null; s.qi++; s.fb=null;
+    if(s.qi>=C.qs.length){ s.done=true; s.qi=C.qs.length-1; won[C.id]=s.qWrong===0; s.fb={cls:s.qWrong?'warn':'good', h:`Quiz done: ${C.qs.length-s.qWrong}/${C.qs.length}`, b:'The rules:', sol:C.solution, next:true}; }
+    render(); }, 1400);
+}
+function explainQ(q){
+  const m=q.q.match(/(\w+)\((\d*)\)/); const fn=m[1], x=Number(m[2]);
+  if(fn==='begin') return 'begin() is always the smallest key.';
+  if(fn==='lower_bound') return `lower_bound(${x}) = the first key ≥ ${x}${q.a===END?': none, so end()':''}.`;
+  if(fn==='upper_bound') return `upper_bound(${x}) = the first key strictly > ${x}${q.a===END?': none, so end()':''}.`;
+  return `find(${x}) looks for the key ${x} exactly. ${q.a===END?`${x} is not a key, so end(). find never looks inside a range.`:''}`;
+}
+function verdict(inside){
+  const seq=C.seqs[s.si]; const truth=s.map.some(([a,b])=>seq>=a&&seq<=b);
+  const ok=inside===truth; if(ok) score+=4; else { score-=3; s.sWrong++; }
+  s.code.push({t:`return ${inside};   // ${ok?'correct':'wrong: should be '+truth}`, cls: ok?'':'ub'});
+  s.fb={cls:ok?'good':'bad', h: ok?'Correct':'Not quite', b: insideWhy(seq,truth)};
+  s.si++;
+  if(s.si>=C.seqs.length){ s.done=true; s.si=C.seqs.length-1; won[C.id]=s.sWrong===0; s.fb.sol=C.solution; s.fb.b+=' That was the last seq. The whole function:'; s.fb.next=true; }
+  else { s.it=null; s.dangling=false; s.last=null; s.code.push({t:`// seq = ${C.seqs[s.si]}`, cls:'r'}); $('xIn').value=C.seqs[s.si]; }
+  render();
+}
+function insideWhy(seq,truth){
+  const ub=firstGT(seq);
+  if(ub===s.map[0][0]) return `upper_bound(${seq}) is begin(): no range starts at or before ${seq}, so it can't be inside.`;
+  const i=(ub===END? s.map.length : idx(ub))-1; const [a,b]=s.map[i];
+  return `upper_bound(${seq}) → ${ub===END?'end()':ub}; step back → ${a}→${b}. ${seq} ${seq<=b?'≤':'>'} ${b}, so ${truth?'inside':'not inside'}.`;
+}
+$('reset').onclick=()=>start(CH.indexOf(C));
+start(0);
+})();
+</script>
+</body>
+</html>
