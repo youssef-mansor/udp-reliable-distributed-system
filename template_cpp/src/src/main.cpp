@@ -1,7 +1,5 @@
-#include <chrono>
 #include <iostream>
 #include <string>
-#include <thread>
 
 #include "hello.h"
 #include "config.hpp"
@@ -11,23 +9,15 @@
 #include "packet.hpp"
 #include <cerrno>
 #include <cstdio>
+#include "output_log.hpp"
+#include <unistd.h>
+#include <optional>
 
-// Global variabls
-uint32_t SEQ = 0;
+
+static volatile sig_atomic_t stopping = 0; // set by the signal handler; must be global
 
 static void stop(int) {
-  // reset signal handlers to default
-  signal(SIGTERM, SIG_DFL);
-  signal(SIGINT, SIG_DFL);
-
-  // immediately stop network packet processing
-  std::cout << "Immediately stopping network packet processing.\n";
-
-  // write/flush output file if necessary
-  std::cout << "Writing output.\n";
-
-  // exit directly from signal handler
-  exit(0);
+  stopping = 1;
 }
 
 int main(int argc, char **argv) {
@@ -40,6 +30,16 @@ int main(int argc, char **argv) {
 
   Parser parser(argc, argv);
   parser.parse();
+
+  std::optional<OutputLog> log;
+  // Open the output log file
+  try{
+    log.emplace(parser.outputPath());
+  }catch (const std::exception& e){
+    std::cerr << "Error: " << e.what() << "\n"; 
+    return EXIT_FAILURE;
+  }
+  
 
   // Check id is within range defined implicitly by hosts
   auto hosts = parser.hosts();
@@ -142,11 +142,12 @@ int main(int argc, char **argv) {
     }
   }
 
-  // After a process finishes broadcasting,
-  // it waits forever for the delivery of messages.
-  while (true) {
-    std::this_thread::sleep_for(std::chrono::hours(1));
+  // run until a SIGINT/SIGTERM sets stopping
+  while (!stopping) {
+    pause();          // sleeps until any signal arrives (from <unistd.h>)
   }
 
+  log->flush();
+  std::cout<<"Process stopped.\n";
   return 0;
 }
