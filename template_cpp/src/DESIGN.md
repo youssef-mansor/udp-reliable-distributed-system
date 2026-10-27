@@ -25,6 +25,8 @@ ACK:  header only; seq = cumulative "delivered everything <= seq from you"
 Single-threaded event loop per process: non-blocking socket + `poll()`.
 No locks, no thread switches (all processes share 2 cores).
 - Each iteration reads at most `MAX_DRAIN` packets (e.g. 64), so ACKs and timers never starve under constant traffic; leftovers stay in the buffer and the next `poll()` returns immediately.
+- Each iteration sends at most `MAX_SEND` new packets (window permitting), so sending never starves receiving.
+- Phase order per iteration: drain → send ACKs → retransmit due packets → send new packets. Receiving and ACKing first keep peers' windows moving.
 
 ## Sender
 - Retransmits unACKed messages on timeout until ACKed.
