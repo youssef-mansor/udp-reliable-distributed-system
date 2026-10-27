@@ -28,6 +28,8 @@ No locks, no thread switches (all processes share 2 cores).
 
 ## Sender
 - Retransmits unACKed messages on timeout until ACKed.
+- Retransmission timeout (RTO): fixed and generous, e.g. 100 ms. It must exceed the round trip (travel both ways + queueing + ACK delay + CPU scheduling on 2 shared cores), which can't be computed ahead of time. Too small causes spurious retransmissions in the loss-free performance tests; too large only slows recovery in the correctness tests.
+- The receiver doesn't tune against the RTO: it ACKs after every bounded drain (well under 1 ms).
 - Window: at most W unACKed packets in flight, so receivers never overflow while active.
 
 ## Window size
@@ -48,4 +50,4 @@ e.g. 212992 B / ~960 B ≈ 222 packets; 2 senders → W ≤ 111, 127 senders →
 ## Deferred / open
 - NACKs for gaps (wait until loss is confirmed; reordering ≠ loss) — add only if measured useful.
 - Adaptive window (grow on ACKs, shrink on timeouts) — only if time allows.
-- Timeout value (must exceed queueing delay at a busy receiver, not just network latency).
+- Measured RTO instead of a fixed one (see `notes/future-optimizations.md`).

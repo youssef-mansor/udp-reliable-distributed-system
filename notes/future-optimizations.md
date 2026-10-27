@@ -13,3 +13,10 @@ Replace the static `W = f(n)` with one that grows while ACKs arrive and shrinks 
 - Gain: finds the receiver's limit on its own; backs off when processes are paused or crashed.
 - Cost: more state and tuning than a constant.
 - Example: +1 packet per ACK, halve W on a timeout.
+
+## Measured retransmission timeout
+Replace the fixed RTO with one computed from measured round trips (like TCP).
+- Sample: `RTT = ACK arrival − send time`, only for never-retransmitted packets (Karn's algorithm).
+- Smooth: `RTO = SRTT + 4 × RTTVAR`, with a floor of a few ms; double it after each timeout (exponential backoff).
+- Gain: adapts to 3 or 128 processes on its own. Cost: per-packet send times and more tuning.
+- Example: SRTT = 2 ms, RTTVAR = 0.5 ms → RTO = 4 ms.
