@@ -79,4 +79,7 @@ dkms.conf
 
 # Executables
 
+# Output files
+example/output/*.output
+
 # End of https://www.toptal.com/developers/gitignore/api/c,c++
