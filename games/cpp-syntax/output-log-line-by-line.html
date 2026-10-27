@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Line by Line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#EDF0EB; --surface:#FAFBF8; --sunk:#E3E8E2; --ink:#17201C; --muted:#5B665F; --line:#D2D9D3;
+  --accent:#2D47C9; --accent-ink:#FFFFFF; --hl:#FFF1C2; --cell:#1D8577; --ptr:#8A3D8E;
+  --good:#2C7A38; --bad:#BC3324; --warn:#A86C12;
+  --good-bg:#E1F0E2; --bad-bg:#F7E2DE; --warn-bg:#F6ECD8;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+    --accent:#8197FF; --accent-ink:#0C1020; --hl:#3A3115; --cell:#4BC3B1; --ptr:#CB80CF;
+    --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+    --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1412; --surface:#171E1B; --sunk:#111815; --ink:#E3E9E5; --muted:#95A19A; --line:#29332F;
+  --accent:#8197FF; --accent-ink:#0C1020; --hl:#3A3115; --cell:#4BC3B1; --ptr:#CB80CF;
+  --good:#6FC67D; --bad:#F27D6E; --warn:#E2A84C;
+  --good-bg:#16291A; --bad-bg:#331915; --warn-bg:#2B2212;
+}
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.5; padding-inline:16px; padding-block:24px 48px}
+.wrap{max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; letter-spacing:-0.01em}
+h1{font-size:clamp(28px,5vw,42px); font-weight:800; line-height:1.05}
+h2{font-size:20px; font-weight:800}
+h3{font-size:15px; font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.mono, code{font-family:var(--mono)}
+code{font-size:.92em; background:var(--sunk); padding:1px 5px; border-radius:4px}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+button{font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); padding:7px 11px}
+button:hover:not(:disabled){border-color:var(--ink)}
+button:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button:disabled{opacity:.45; cursor:not-allowed}
+button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+input[type=number], input[type=text]{font-family:var(--mono); font-size:14px; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink)}
+input[type=number]{width:96px}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:12px}
+.row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.layout{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:18px; align-items:start}
+@media (max-width:940px){ .layout{grid-template-columns:minmax(0,1fr)} }
+.codeview{font-family:var(--mono); font-size:12.5px; background:var(--sunk); border:1px solid var(--line); border-radius:12px; padding:8px 0; overflow-x:auto; position:sticky; top:12px}
+.codeview .ln{display:grid; grid-template-columns:34px 14px 1fr; white-space:pre; padding:1px 10px 1px 0; cursor:pointer; border-left:3px solid transparent}
+.codeview .ln:hover{background:color-mix(in srgb, var(--accent) 8%, transparent)}
+.codeview .ln .n{color:var(--muted); text-align:right; padding-right:8px}
+.codeview .ln .m{font-size:10px; color:var(--good)}
+.codeview .ln.on{background:var(--hl); border-left-color:var(--accent)}
+.codeview .ln.step{background:color-mix(in srgb, var(--ptr) 22%, transparent)}
+.stations{display:flex; flex-wrap:wrap; gap:6px}
+.stations button{font-size:12.5px; padding:5px 9px}
+.stations button.cur{border-color:var(--accent); color:var(--accent); font-weight:600}
+.stations button.done::after{content:" ✓"; color:var(--good)}
+.explain{font-size:14.5px; display:flex; flex-direction:column; gap:8px}
+.explain ul{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:4px}
+.widget{border:1px dashed var(--line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:10px; background:color-mix(in srgb, var(--sunk) 55%, transparent)}
+.widget .lab{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.quiz{display:flex; flex-direction:column; gap:8px}
+.quiz .q{font-weight:600}
+.quiz .opts{display:flex; flex-direction:column; gap:6px}
+.quiz .opts button{text-align:left; font-size:14px}
+.quiz .opts button.right{border-color:var(--good); background:var(--good-bg)}
+.quiz .opts button.wrong{border-color:var(--bad); background:var(--bad-bg)}
+.fb{border-radius:10px; padding:10px 12px; font-size:13.5px}
+.fb.good{background:var(--good-bg)} .fb.bad{background:var(--bad-bg)} .fb.warn{background:var(--warn-bg)}
+.score{font-family:var(--display); font-weight:800; font-size:26px; font-variant-numeric:tabular-nums}
+.cells{display:flex; flex-wrap:wrap; gap:3px}
+.cellb{width:26px; height:34px; border:1px solid var(--line); border-radius:5px; background:var(--surface); font-family:var(--mono); font-size:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative}
+.cellb.fill{background:color-mix(in srgb, var(--cell) 22%, var(--surface)); border-color:color-mix(in srgb, var(--cell) 55%, var(--line))}
+.cellb.nul{background:color-mix(in srgb, var(--warn) 25%, var(--surface)); border-color:var(--warn)}
+.cellb .i{position:absolute; bottom:-15px; font-size:9px; color:var(--muted)}
+.cellb.ptr{outline:2px solid var(--ptr); outline-offset:1px}
+.ptrlab{font-family:var(--mono); font-size:12px; color:var(--ptr); font-weight:600}
+.flagrow{display:flex; flex-wrap:wrap; gap:8px}
+.flag{font-family:var(--mono); font-size:12.5px; padding:6px 10px; border-radius:8px; border:1.5px solid var(--line); background:var(--surface)}
+.flag[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+.bits{font-family:var(--mono); font-size:13px}
+.bits b{font-weight:600}
+.perm{display:grid; grid-template-columns:70px repeat(3,40px) 60px; gap:4px; align-items:center; font-family:var(--mono); font-size:13px}
+.perm button{padding:4px 0; font-family:var(--mono)}
+.perm button[aria-pressed="true"]{background:var(--good); color:var(--surface); border-color:var(--good)}
+.file{font-family:var(--mono); font-size:12.5px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:8px 10px; white-space:pre-wrap; min-height:38px}
+.meter{display:flex; flex-direction:column; gap:4px; font-family:var(--mono); font-size:12.5px}
+.bar{height:16px; border-radius:4px; background:var(--sunk); border:1px solid var(--line); position:relative; overflow:hidden}
+.bar i{position:absolute; left:0; top:0; bottom:0; background:var(--cell)}
+.bar s{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--bad)}
+.kv{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-family:var(--mono); font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0; font-weight:600}
+.pairs{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+.pairs button{font-family:var(--mono); font-size:12.5px; text-align:left}
+.pairs button.sel{border-color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, var(--surface))}
+.pairs button.ok{border-color:var(--good); background:var(--good-bg); cursor:default}
+.tracelog{font-family:var(--mono); font-size:12px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:6px 8px; max-height:160px; overflow:auto; display:flex; flex-direction:column; gap:1px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:6px">
+    <span class="eyebrow">template_cpp/src/src/output_log.cpp</span>
+    <h1>Line by Line</h1>
+    <p class="muted" style="max-width:72ch">Your log file, explained one piece at a time. Each station covers a few lines: a short explanation, a hands-on widget, and a quiz. Click any line of code to jump to its station. Finish all twelve and every line will be one you can read.</p>
+  </header>
+
+  <div class="panel">
+    <div class="row" style="justify-content:space-between">
+      <div class="stations" id="stations"></div>
+      <div class="row"><span class="eyebrow">score</span><span class="score" id="score">0</span></div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="codeview" id="code"></div>
+    <div class="panel" id="card"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const CODE=`#include "output_log.hpp"
+
+#include <cerrno>
+#include <charconv>
+#include <cstring>
+#include <fcntl.h>
+#include <stdexcept>
+#include <unistd.h>
+
+OutputLog::OutputLog(const std::string & path_to_out_file)
+    : fd_{open(path_to_out_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644)}
+{
+    if (fd_ < 0) {
+        throw std::runtime_error("cannot open output file " + path_to_out_file + ": " + std::strerror(errno));
+    }
+    buff_.reserve(FLUSH_BYTES + 64); // room for one more line past the threshold
+}
+
+OutputLog::~OutputLog(){
+    flush();
+    close(fd_);
+}
+
+void OutputLog::delivered(uint8_t sender_id, uint32_t seq){
+    // the whole line is appended at once, so the file never holds half a line
+    char line[32];
+    char* p = line;
+    *p++ = 'd';
+    *p++ = ' ';
+    p = std::to_chars(p, line + sizeof(line), sender_id).ptr;
+    *p++ = ' ';
+    p = std::to_chars(p, line + sizeof(line), seq).ptr;
+    *p++ = '\\n';
+    appendLine(line, static_cast<size_t>(p - line));
+}
+
+void OutputLog::broadcasted(uint32_t seq){
+    char line[32];
+    char* p = line;
+    *p++ = 'b';
+    *p++ = ' ';
+    p = std::to_chars(p, line + sizeof(line), seq).ptr;
+    *p++ = '\\n';
+    appendLine(line, static_cast<size_t>(p - line));
+}
+
+void OutputLog::appendLine(const char* line, size_t len){
+    buff_.append(line, len);
+    if (buff_.size() >= FLUSH_BYTES) {
+        flush();
+    }
+}
+
+bool OutputLog::flush(){
+    // write() may write fewer bytes than asked, so loop until everything is out
+    size_t done = 0;
+    while (done < buff_.size()) {
+        ssize_t n = write(fd_, buff_.data() + done, buff_.size() - done);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            buff_.erase(0, done); // keep what wasn't written
+            return false;
+        }
+        done += static_cast<size_t>(n);
+    }
+    buff_.clear();
+    return true;
+}`.split('\n');
+
+/* ---------- stations ---------- */
+const ST=[
+ { id:'inc', name:'Includes', lines:[3,8], widget:'pairs',
+   html:`<p>Each <code>#include</code> brings in declarations this file uses. A <code>&lt;c…&gt;</code> header (like <code>&lt;cstring&gt;</code>) is the C++ version of a C header (<code>&lt;string.h&gt;</code>); <code>&lt;fcntl.h&gt;</code> and <code>&lt;unistd.h&gt;</code> are POSIX (Linux) headers with no C++ version.</p><p>Match each header with what this file takes from it.</p>`,
+   quiz:[{q:'output_log.hpp is included first, before any system header. Why is that a good habit?', o:['It compiles faster','If the header forgot one of its own includes, the build fails right here, so the header is proven to compile on its own','System headers must come last by C++ rule'], a:1, e:'Including your own header first proves it is self-contained ("include what you use"). If it relied on something only this .cpp includes, the error shows up immediately.'}]},
+ { id:'ctor', name:'Constructor', lines:[10,12], widget:null,
+   html:`<ul>
+     <li><code>OutputLog::OutputLog(...)</code>: the class name twice. The first is "inside class OutputLog", the second is the constructor's own name.</li>
+     <li><code>const std::string &amp; path_to_out_file</code>: a reference to the caller's string, so no copy, and <code>const</code>, so it can't be changed here.</li>
+     <li><code>: fd_{ ... }</code>: the <b>member initializer list</b>. It sets <code>fd_</code> <i>before</i> the body <code>{ }</code> runs, here to whatever <code>open(...)</code> returns.</li>
+     <li><code>open(...)</code> returns a <b>file descriptor</b>: a small int such as 3 that names the open file, or <b>−1</b> on failure.</li></ul>`,
+   quiz:[{q:'When exactly does open() run?', o:['When delivered() is first called','When an OutputLog object is created, before the constructor body runs','When main() exits'], a:1, e:'The initializer list runs as the object is constructed, before the { } body. So the file is opened the moment you write OutputLog log(path);'},
+         {q:'Why const std::string & instead of std::string?', o:['It avoids copying the path and promises not to modify it','It makes the string null-terminated','open() requires a reference'], a:0, e:'& means reference (no copy); const means read-only. A plain std::string parameter would copy the whole path.'}]},
+ { id:'cstr', name:'c_str()', lines:[11,11], widget:'cstr',
+   html:`<p><code>open()</code> is a C function: it takes a <code>const char*</code>, a pointer to characters ending with a <b>null byte</b> <code>'\\0'</code>. It knows nothing about <code>std::string</code>.</p><p><code>path.c_str()</code> returns exactly that: a pointer to the string's characters, guaranteed to end in <code>'\\0'</code>. The C function reads bytes until it hits the null byte. Type a path below and look at the memory.</p>`,
+   quiz:[{q:'How does open() know where the path ends?', o:['It reads std::string::size()','It stops at the first \\0 byte','The path is always 256 bytes'], a:1, e:'C strings carry no length. Functions scan until the null terminator, which is why c_str() guarantees one.'}]},
+ { id:'flags', name:'open() flags', lines:[11,11], widget:'flags',
+   html:`<p>The second argument says <b>how</b> to open the file. Each flag is one bit; <code>|</code> (bitwise OR) combines them into one number.</p><ul>
+     <li><code>O_WRONLY</code>: write only (you never read the log).</li>
+     <li><code>O_CREAT</code>: create the file if it doesn't exist.</li>
+     <li><code>O_TRUNC</code>: if it exists, empty it first (length 0).</li>
+     <li><code>O_APPEND</code> (not used): every write goes to the end.</li></ul><p>Toggle flags and pick a starting situation to see what happens.</p>`,
+   quiz:[{q:'You drop O_TRUNC, and the output file already holds 500 lines from a previous run. You write 10 lines. What does the file contain?', o:['Just your 10 lines','Your 10 lines, then what is left of the old ones (possibly a cut-off line)','The 500 old lines, then your 10'], a:1, e:'Without O_TRUNC the old content stays, and writing starts at offset 0, overwriting only the first bytes. The leftover old lines, and maybe half a line, make the grader see events that never happened. Try it in the widget above.'},
+         {q:'O_WRONLY | O_CREAT is a single int. How can one number hold two flags?', o:['Each flag is a different bit, and | sets both bits','The compiler stores a list','open() is overloaded for each combination'], a:0, e:'Flags are powers of two (different bits). OR-ing them sets each bit; open() tests each bit with &.'}]},
+ { id:'perm', name:'Permissions 0644', lines:[11,11], widget:'perm',
+   html:`<p>The third argument is only used when <code>O_CREAT</code> actually creates the file: who may read, write and execute it.</p><ul>
+     <li>Three groups: <b>owner</b>, <b>group</b>, <b>others</b>. Each gets one octal digit: read = 4, write = 2, execute = 1, added up.</li>
+     <li><code>0644</code> → owner 6 (read + write), group 4 (read), others 4 (read). <code>ls -l</code> shows it as <code>-rw-r--r--</code>.</li>
+     <li>The leading <b>0</b> makes it an <b>octal</b> literal in C++. <code>644</code> without it would be decimal 644, a completely different number.</li></ul><p>Build 0644 in the grid.</p>`,
+   quiz:[{q:'What is the C++ literal 0644 in decimal?', o:['644','420','6 4 4'], a:1, e:'0644 octal = 6·64 + 4·8 + 4 = 420. Writing 644 (decimal) would set strange permission bits.'},
+         {q:'Which permissions does 0600 give?', o:['owner read + write, nobody else anything','everyone read','owner execute only'], a:0, e:'6 = 4 + 2 = read + write for the owner; 0 for group and others.'}]},
+ { id:'err', name:'Error path', lines:[13,15], widget:null,
+   html:`<ul>
+     <li><code>if (fd_ &lt; 0)</code>: <code>open</code> returned −1, so it failed.</li>
+     <li><code>errno</code> (from <code>&lt;cerrno&gt;</code>): a global error code that the failing call set, for example <code>ENOENT</code> (no such directory).</li>
+     <li><code>std::strerror(errno)</code> (from <code>&lt;cstring&gt;</code>): turns that code into text, e.g. <code>"No such file or directory"</code>.</li>
+     <li><code>"cannot open output file " + path_to_out_file + ...</code>: <code>+</code> works because <code>path_to_out_file</code> is a <code>std::string</code>. Each <code>+</code> produces a new <code>std::string</code>.</li>
+     <li><code>throw std::runtime_error(...)</code>: stops the constructor. No object is created, so the destructor never runs. Here that's fine: there is no open file to close.</li></ul>`,
+   quiz:[{q:'Would "cannot open " + ": " (two string literals, no std::string between them) compile?', o:['Yes, it concatenates them','No: two string literals are char arrays, and + is not defined between two pointers','Yes, but only in C++17'], a:1, e:'+ is defined for std::string. In this line it works because path_to_out_file (a std::string) is part of each addition, left to right.'},
+         {q:'The constructor throws. Does ~OutputLog() run?', o:['Yes, always','No: destructors only run for fully constructed objects'], a:1, e:'An object whose constructor threw never existed. That is also why the socket constructor closes its fd itself before throwing.'}]},
+ { id:'reserve', name:'reserve()', lines:[16,16], widget:'reserve',
+   html:`<p>A <code>std::string</code> has a <b>size</b> (characters in use) and a <b>capacity</b> (memory already allocated). When an <code>append</code> would exceed the capacity, the string allocates a bigger block (about double), <b>copies</b> everything over, and frees the old block.</p><p><code>buff_.reserve(FLUSH_BYTES + 64)</code> allocates the full 1 MiB + 64 once, up front. Since the buffer is flushed at 1 MiB, appending never has to reallocate. <code>reserve</code> changes capacity only: the size stays 0.</p>`,
+   quiz:[{q:'Right after buff_.reserve(1048640), what is buff_.size()?', o:['1048640','0','64'], a:1, e:'reserve only allocates. size() counts characters actually in the string, still none.'},
+         {q:'Why the extra + 64?', o:['A line is appended before the size check, so the buffer can exceed FLUSH_BYTES by one line','Strings need 64 bytes of header','To align memory'], a:0, e:'appendLine appends first, then checks >= FLUSH_BYTES. One line (at most ~30 bytes here) can go past the threshold, and 64 covers it without reallocating.'}]},
+ { id:'dtor', name:'Destructor', lines:[19,22], widget:null,
+   html:`<ul>
+     <li><code>~OutputLog()</code>: runs automatically when the object goes out of scope, e.g. at the end of <code>main</code>.</li>
+     <li><code>flush()</code> first, so buffered lines reach the file.</li>
+     <li><code>close(fd_)</code> (from <code>&lt;unistd.h&gt;</code>): releases the file descriptor.</li>
+     <li>This is <b>RAII</b>: opening in the constructor, closing in the destructor, so you can't forget either.</li></ul>`,
+   quiz:[{q:'What if close() came before flush()?', o:['Nothing changes','flush() would write to a closed fd: write fails (EBADF) and the buffered lines are lost','close() flushes automatically'], a:1, e:'close() knows nothing about your std::string buffer. Order matters: write it out, then close.'},
+         {q:'The process is killed with SIGKILL. Does the destructor run?', o:['Yes','No: SIGKILL can\'t be caught, the process just vanishes'], a:1, e:'That is why the stop handler and an explicit flush() matter. Luckily the graders use SIGTERM/SIGINT, which your flag-style handler turns into a clean exit.'}]},
+ { id:'ptr', name:'char line[32] and *p++', lines:[26,29], widget:'ptr',
+   html:`<ul>
+     <li><code>char line[32];</code>: 32 bytes on the stack, uninitialized. No heap allocation, so it's very cheap.</li>
+     <li><code>char* p = line;</code>: the array decays to a pointer to its first byte. <code>p</code> is a cursor: where the next character goes.</li>
+     <li><code>*p++ = 'd';</code>: write <code>'d'</code> where <code>p</code> points, <b>then</b> move <code>p</code> one byte forward. (<code>p++</code> yields the old address; <code>*</code> writes there.)</li>
+     <li><code>'d'</code> in single quotes is one <code>char</code>. <code>"d"</code> in double quotes would be a two-byte string: <code>d</code> plus <code>\\0</code>.</li></ul><p>Step through <code>delivered()</code> in the widget. Watch <code>p</code> move.</p>`,
+   quiz:[{q:'After char* p = line; *p++ = \'d\'; *p++ = \' \';, where does p point?', o:['line[0]','line[2]','line[1]'], a:1, e:'Each *p++ writes one byte and advances once. Two writes put p at index 2.'},
+         {q:'Why is 32 bytes enough?', o:['"d " + up to 3 digits + " " + up to 10 digits + "\\n" is at most 17 bytes','32 is the maximum line length in the spec','It isn\'t; it can overflow'], a:0, e:'sender ≤ 128 (3 digits), seq ≤ 4294967295 (10 digits): 2 + 3 + 1 + 10 + 1 = 17 ≤ 32.'}]},
+ { id:'tochars', name:'std::to_chars', lines:[30,33], widget:'ptr',
+   html:`<p><code>std::to_chars(first, last, value)</code> (from <code>&lt;charconv&gt;</code>) writes the decimal digits of <code>value</code> into the bytes from <code>first</code> up to, at most, <code>last</code>.</p><ul>
+     <li>It returns a small struct; its <code>.ptr</code> member points <b>one past the last digit written</b>. So <code>p = ...ptr</code> moves the cursor past the number.</li>
+     <li><code>line + sizeof(line)</code>: <code>sizeof(line)</code> is 32, so this is the address just past the array's end, the limit to never write beyond.</li>
+     <li>It allocates nothing and writes <b>no</b> <code>'\\0'</code>. That's why it beats <code>std::to_string</code>, which builds a whole new <code>std::string</code> on every call.</li>
+     <li><code>*p++ = '\\n';</code> ends the line. <code>'\\n'</code> is one char: the newline.</li></ul>`,
+   quiz:[{q:'to_chars(p, end, 17) when p points at line[2]. What is .ptr?', o:['line[2]','line[4]','line[3]'], a:1, e:'It writes \'1\' at [2] and \'7\' at [3], and returns one past the last digit: line[4].'},
+         {q:'Why not std::to_string(seq)?', o:['to_string allocates a new std::string every call; to_chars writes into your buffer with no allocation','to_string can\'t format uint32_t','to_chars adds the newline'], a:0, e:'This code runs once per delivered message, millions of times. Avoiding an allocation each time is a real saving.'}]},
+ { id:'len', name:'p - line and appendLine', lines:[34,52], widget:'ptr',
+   html:`<ul>
+     <li><code>p - line</code>: subtracting two pointers into the same array gives the <b>distance</b> between them, i.e. how many bytes were written: the line's length.</li>
+     <li>The result has type <code>ptrdiff_t</code> (signed). <code>static_cast&lt;size_t&gt;(...)</code> converts it to the unsigned <code>size_t</code> that <code>appendLine</code> wants, explicitly. An implicit signed-to-unsigned conversion can trigger a warning, and the template builds with <code>-Werror</code>.</li>
+     <li><code>buff_.append(line, len)</code>: copy exactly <code>len</code> bytes from <code>line</code> to the end of <code>buff_</code>. The length is given, so no <code>'\\0'</code> is needed.</li>
+     <li><code>buff_.size() &gt;= FLUSH_BYTES</code>: once the buffer holds 1 MiB, write it out. Otherwise just keep collecting.</li>
+     <li><code>broadcasted()</code> (lines 37–45) is the same recipe with <code>'b'</code> and no sender.</li></ul>`,
+   quiz:[{q:'For the line "d 3 17\\n", what is p - line?', o:['6','7','8'], a:1, e:'d, space, 3, space, 1, 7, newline = 7 bytes.'},
+         {q:'buff_.append(line, len) instead of buff_ += line. Why give the length?', o:['line has no \\0 terminator, so += would read past it','append is faster than += in every case','+= only works with std::string'], a:0, e:'to_chars writes no null byte, and line is uninitialized after the newline. Without an explicit length, append would keep reading garbage until it happened to hit a zero byte.'}]},
+ { id:'flush', name:'flush()', lines:[54,70], widget:'flush',
+   html:`<ul>
+     <li><code>write(fd_, ptr, count)</code> (from <code>&lt;unistd.h&gt;</code>): asks the kernel to write <code>count</code> bytes. It returns how many it <b>actually</b> wrote, which may be fewer, or −1 on error.</li>
+     <li><code>buff_.data() + done</code>: <code>data()</code> is a pointer to the buffer's first byte; <code>+ done</code> skips what was already written.</li>
+     <li><code>ssize_t</code>: a <b>signed</b> size, because −1 must be representable.</li>
+     <li><code>EINTR</code>: a signal interrupted the write. <code>continue</code> retries the same bytes.</li>
+     <li>On a real error, <code>buff_.erase(0, done)</code> removes only what was written, keeping the rest for a later try. Then <code>return false</code>.</li>
+     <li>When everything is out, <code>buff_.clear()</code> empties the buffer (size 0, the capacity is kept).</li></ul><p>In the widget, <b>you</b> are the kernel: decide what each <code>write()</code> returns.</p>`,
+   quiz:[{q:'Why not just call write() once?', o:['write() may write only part of the buffer; a single call could silently drop the rest','write() only accepts 1 KiB','It is the same; the loop is decoration'], a:0, e:'A partial write is legal (signals, full disks, pipes). Ignoring the return value is a classic source of truncated files.'},
+         {q:'After buff_.clear(), what happens to the 1 MiB that reserve() allocated?', o:['It is freed','It stays allocated: clear() sets size to 0 but keeps the capacity','It is halved'], a:1, e:'clear() keeps capacity, so the next million lines again append without any reallocation.'}]},
+];
+
+let cur=0, score=0; const done={}; const answered={};
+const st=()=>ST[cur];
+
+/* ---------- code view ---------- */
+function renderCode(stepLine){
+  const [a,b]=st().lines;
+  $('code').innerHTML=CODE.map((l,i)=>{ const n=i+1; const owner=ST.findIndex(s=>n>=s.lines[0]&&n<=s.lines[1]);
+    const on=n>=a&&n<=b; const isDone= owner>=0 && ST.filter(s=>n>=s.lines[0]&&n<=s.lines[1]).every(s=>done[s.id]);
+    return `<div class="ln ${on?'on':''} ${stepLine===n?'step':''}" data-n="${n}"><span class="n">${n}</span><span class="m">${owner>=0&&isDone?'✓':''}</span><span>${esc(l)||' '}</span></div>`; }).join('');
+  $('code').querySelectorAll('.ln').forEach(el=>el.onclick=()=>{ const n=Number(el.dataset.n); const i=ST.findIndex(s=>n>=s.lines[0]&&n<=s.lines[1]); if(i>=0){ cur=i; render(); } });
+}
+function renderStations(){
+  $('stations').innerHTML=ST.map((s,i)=>`<button class="${i===cur?'cur':''} ${done[s.id]?'done':''}" data-i="${i}">${i+1}. ${s.name}</button>`).join('');
+  $('stations').querySelectorAll('button').forEach(b=>b.onclick=()=>{ cur=Number(b.dataset.i); render(); });
+  $('score').textContent=score;
+}
+
+/* ---------- card ---------- */
+function render(){
+  renderStations(); renderCode();
+  const s=st();
+  $('card').innerHTML=`<div><span class="eyebrow">station ${cur+1} of ${ST.length} · lines ${s.lines[0]}${s.lines[1]!==s.lines[0]?'–'+s.lines[1]:''}</span><h2>${s.name}</h2></div>
+    <div class="explain">${s.html}</div>
+    ${s.widget?`<div class="widget" id="w"></div>`:''}
+    <div class="quiz" id="quiz"></div>
+    <div class="row" style="justify-content:space-between"><button id="prev" ${cur===0?'disabled':''}>← previous</button><button class="primary" id="next" ${cur===ST.length-1?'disabled':''}>next station →</button></div>`;
+  $('prev').onclick=()=>{ cur--; render(); }; $('next').onclick=()=>{ cur++; render(); window.scrollTo({top:0,behavior:'smooth'}); };
+  if(s.widget) WIDGETS[s.widget]($('w'));
+  renderQuiz();
+}
+function renderQuiz(){
+  const s=st();
+  $('quiz').innerHTML=`<span class="eyebrow">check yourself</span>`+s.quiz.map((q,qi)=>{
+    const key=s.id+qi, pick=answered[key];
+    return `<div class="quiz"><span class="q">${esc(q.q)}</span><div class="opts">${q.o.map((o,oi)=>{ let c=''; if(pick!==undefined){ if(oi===q.a) c='right'; else if(oi===pick) c='wrong'; }
+      return `<button class="${c}" data-q="${qi}" data-o="${oi}" ${pick!==undefined?'disabled':''}>${esc(o)}</button>`; }).join('')}</div>
+      ${pick!==undefined?`<div class="fb ${pick===q.a?'good':'bad'}">${pick===q.a?'Right. ':'Not quite. '}${esc(q.e)}</div>`:''}</div>`; }).join('');
+  $('quiz').querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{ const qi=Number(b.dataset.q), oi=Number(b.dataset.o); const key=s.id+qi; if(answered[key]!==undefined) return;
+    answered[key]=oi; score+= oi===s.quiz[qi].a?5:-1;
+    if(s.quiz.every((q,i)=>answered[s.id+i]!==undefined)) done[s.id]=true;
+    renderStations(); renderCode(); renderQuiz(); });
+}
+
+/* ---------- widgets ---------- */
+const WIDGETS={
+ pairs(w){
+   const P=[['<cerrno>','errno, EINTR'],['<charconv>','std::to_chars'],['<cstring>','std::strerror'],['<fcntl.h>','open, O_WRONLY, O_CREAT, O_TRUNC'],['<stdexcept>','std::runtime_error'],['<unistd.h>','write, close']];
+   const right=[...P].sort(()=>Math.random()-.5); let sel=null; const ok=new Set();
+   const draw=()=>{ w.innerHTML=`<span class="lab">match header → what it provides</span><div class="pairs">${P.map((p,i)=>`<button data-h="${i}" class="${ok.has(i)?'ok':sel===i?'sel':''}">${esc(p[0])}</button><button data-r="${P.indexOf(right[i])}" class="${ok.has(P.indexOf(right[i]))?'ok':''}">${esc(right[i][1])}</button>`).join('')}</div><span class="muted" style="font-size:12.5px">${ok.size===P.length?'All matched.':'Click a header on the left, then what it gives on the right.'}</span>`;
+     w.querySelectorAll('[data-h]').forEach(b=>b.onclick=()=>{ const i=Number(b.dataset.h); if(!ok.has(i)){ sel=i; draw(); } });
+     w.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{ const i=Number(b.dataset.r); if(sel===null||ok.has(i)) return; if(i===sel){ ok.add(i); score+=2; } else score-=1; sel=null; renderStations(); draw(); }); };
+   draw();
+ },
+ cstr(w){
+   let txt='../example/output/2.output';
+   const draw=()=>{ const ch=[...txt].slice(0,40);
+     w.innerHTML=`<span class="lab">std::string path</span><input type="text" id="cs" value="${esc(txt)}" style="width:100%">
+       <div class="kv"><dt>path.size()</dt><dd>${txt.length}</dd><dt>bytes c_str() points to</dt><dd>${txt.length+1} (the extra one is '\\0')</dd></div>
+       <div class="cells" style="padding-bottom:16px">${ch.map((c,i)=>`<div class="cellb fill ${i===0?'ptr':''}">${esc(c)}<span class="i">${i}</span></div>`).join('')}${txt.length>40?'<span class="muted">…</span>':''}<div class="cellb nul">\\0<span class="i">${txt.length}</span></div></div>
+       <span class="ptrlab">c_str() → points at index 0 (outlined). open() reads forward until the yellow \\0.</span>`;
+     const inp=w.querySelector('#cs'); inp.oninput=()=>{ txt=inp.value; const pos=inp.selectionStart; draw(); const n=w.querySelector('#cs'); n.focus(); n.setSelectionRange(pos,pos); }; };
+   draw();
+ },
+ flags(w){
+   const F=[['O_WRONLY',1],['O_CREAT',0o100],['O_TRUNC',0o1000],['O_APPEND',0o2000]];
+   const on={O_WRONLY:true,O_CREAT:true,O_TRUNC:true,O_APPEND:false}; let exists=true;
+   const draw=()=>{ const v=F.reduce((a,[n,b])=>on[n]?a|b:a,0);
+     let res, cls='good';
+     if(!on.O_WRONLY){ res='Opened read-only (O_RDONLY is 0): every write() fails with EBADF. No log at all.'; cls='bad'; }
+     else if(!exists && !on.O_CREAT){ res='open() returns −1, errno = ENOENT: the file doesn\'t exist and you didn\'t ask to create it. The constructor throws.'; cls='bad'; }
+     else { const old=exists?'d 1 1\nd 1 2\nd 1 3\nd 1 4\nd 1 5\n':''; const neu='b 1\nb 2\n';
+       let after; if(!exists||on.O_TRUNC) after=on.O_APPEND?neu:neu; else if(on.O_APPEND) after=old+neu; else after=neu+old.slice(neu.length);
+       res=`<span>file after writing <code>b 1</code>, <code>b 2</code>:</span><div class="file">${esc(after)}</div>`;
+       if(exists && !on.O_TRUNC && !on.O_APPEND){ cls='bad'; res+='<span>The old run\'s lines survive after yours: the grader reads events that never happened.</span>'; }
+       else if(exists && !on.O_TRUNC && on.O_APPEND){ cls='bad'; res+='<span>The previous run\'s lines are still at the top.</span>'; }
+       else res+=`<span>Correct: ${exists?'the old content was erased by O_TRUNC':'O_CREAT created the file'}, only this run's lines.</span>`; }
+     w.innerHTML=`<span class="lab">flags</span><div class="flagrow">${F.map(([n])=>`<button class="flag" data-f="${n}" aria-pressed="${on[n]}">${n}</button>`).join('')}</div>
+       <div class="bits">value = <b>0${v.toString(8)}</b> octal = <b>${v}</b> decimal = <b>${v.toString(2).padStart(11,'0')}</b> binary</div>
+       <div class="row"><span class="lab">before open():</span><button class="flag" id="ex" aria-pressed="${exists}">file exists with 5 old lines</button><button class="flag" id="nx" aria-pressed="${!exists}">file doesn't exist</button></div>
+       <div class="fb ${cls}" style="display:flex;flex-direction:column;gap:6px">${res}</div>`;
+     w.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ on[b.dataset.f]=!on[b.dataset.f]; draw(); });
+     w.querySelector('#ex').onclick=()=>{ exists=true; draw(); }; w.querySelector('#nx').onclick=()=>{ exists=false; draw(); }; };
+   draw();
+ },
+ perm(w){
+   const g={owner:[true,true,false], group:[true,false,false], others:[true,false,false]};
+   const draw=()=>{ const dig=k=>(g[k][0]?4:0)+(g[k][1]?2:0)+(g[k][2]?1:0); const oct=`0${dig('owner')}${dig('group')}${dig('others')}`;
+     const ls='-'+['owner','group','others'].map(k=>(g[k][0]?'r':'-')+(g[k][1]?'w':'-')+(g[k][2]?'x':'-')).join('');
+     w.innerHTML=`<span class="lab">click to toggle</span><div class="perm"><span></span><span class="mono">r=4</span><span class="mono">w=2</span><span class="mono">x=1</span><span>digit</span>
+       ${['owner','group','others'].map(k=>`<span>${k}</span>${[0,1,2].map(i=>`<button data-k="${k}" data-i="${i}" aria-pressed="${g[k][i]}">${'rwx'[i]}</button>`).join('')}<b class="mono">${dig(k)}</b>`).join('')}</div>
+       <div class="kv"><dt>octal literal</dt><dd>${oct}</dd><dt>decimal value</dt><dd>${parseInt(oct,8)}</dd><dt>ls -l shows</dt><dd>${ls}</dd></div>
+       <div class="fb ${oct==='0644'?'good':'warn'}">${oct==='0644'?'That is 0644: you may write the log, everyone may read it.':'Target: 0644 (rw-r--r--).'}</div>`;
+     w.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ g[b.dataset.k][Number(b.dataset.i)]=!g[b.dataset.k][Number(b.dataset.i)]; draw(); }); };
+   draw();
+ },
+ reserve(w){
+   let useR=true, size=0, cap, reallocs=0, copied=0; const LIM=1048640, LINE=12;
+   const reset=()=>{ size=0; reallocs=0; copied=0; cap= useR? LIM : 15; };
+   reset();
+   const add=n=>{ for(let i=0;i<n;i++){ if(size+LINE>cap){ const nc=Math.max(cap*2, size+LINE); copied+=size; cap=nc; reallocs++; } size+=LINE; if(size>=1048576){ size=0; } } };
+   const draw=()=>{ const pct=x=>Math.min(100,100*x/Math.max(cap,LIM));
+     w.innerHTML=`<span class="lab">a buffer of 12-byte lines</span>
+       <div class="row"><button class="flag" id="r1" aria-pressed="${useR}">with reserve(1048640)</button><button class="flag" id="r0" aria-pressed="${!useR}">without reserve</button></div>
+       <div class="meter"><span>size ${size.toLocaleString()} B · capacity ${cap.toLocaleString()} B</span><div class="bar"><i style="width:${pct(size)}%"></i><s style="left:${pct(1048576)}%"></s></div><span class="muted">red mark = FLUSH_BYTES (1 MiB): flush, size back to 0</span></div>
+       <div class="kv"><dt>reallocations</dt><dd>${reallocs}</dd><dt>bytes copied by reallocations</dt><dd>${copied.toLocaleString()}</dd></div>
+       <div class="row"><button id="a1">append 1 line</button><button id="a1k">append 1,000 lines</button><button id="a100k">append 100,000 lines</button><button id="rs">reset</button></div>`;
+     w.querySelector('#r1').onclick=()=>{ useR=true; reset(); draw(); }; w.querySelector('#r0').onclick=()=>{ useR=false; reset(); draw(); };
+     w.querySelector('#a1').onclick=()=>{ add(1); draw(); }; w.querySelector('#a1k').onclick=()=>{ add(1000); draw(); }; w.querySelector('#a100k').onclick=()=>{ add(100000); draw(); }; w.querySelector('#rs').onclick=()=>{ reset(); draw(); }; };
+   draw();
+ },
+ ptr(w){
+   let sender=3, seq=17, step=0; const firstLine=26;
+   const prog=()=>[
+     {ln:26, txt:'char line[32];'}, {ln:27, txt:'char* p = line;'}, {ln:28, txt:"*p++ = 'd';"}, {ln:29, txt:"*p++ = ' ';"},
+     {ln:30, txt:'p = std::to_chars(p, line + sizeof(line), sender_id).ptr;'}, {ln:31, txt:"*p++ = ' ';"},
+     {ln:32, txt:'p = std::to_chars(p, line + sizeof(line), seq).ptr;'}, {ln:33, txt:"*p++ = '\\n';"},
+     {ln:34, txt:'appendLine(line, static_cast<size_t>(p - line));'} ];
+   const run=k=>{ const cells=Array(32).fill(null); let p=null, msg='', len=null;
+     const P=prog();
+     for(let i=0;i<k;i++){ const s=P[i];
+       if(s.ln===26){ msg='32 bytes reserved on the stack. Their contents are garbage (shown as ?).'; }
+       else if(s.ln===27){ p=0; msg='p points at line[0].'; }
+       else if(s.ln===28){ cells[p]='d'; p++; msg="wrote 'd' at index 0, then p moved to 1."; }
+       else if(s.ln===29||s.ln===31){ cells[p]='␣'; msg=`wrote a space at index ${p}, then p moved to ${p+1}.`; p++; }
+       else if(s.ln===30||s.ln===32){ const v=String(s.ln===30?sender:seq); const from=p; for(const c of v){ cells[p++]=c; } msg=`to_chars wrote "${v}" at ${from}–${p-1} and returned .ptr = line + ${p} (one past the last digit). No \\0.`; }
+       else if(s.ln===33){ cells[p]='\\n'; msg=`wrote the newline at index ${p}, then p moved to ${p+1}.`; p++; }
+       else if(s.ln===34){ len=p; msg=`p − line = ${p}: the line is ${p} bytes. appendLine copies exactly those ${p} bytes into buff_.`; }
+     }
+     return {cells,p,msg,len}; };
+   const draw=()=>{ const P=prog(); const r=run(step);
+     renderCode(step>0?P[step-1].ln:undefined);
+     w.innerHTML=`<span class="lab">step through delivered(sender_id, seq)</span>
+       <div class="row"><span class="mono" style="font-size:13px">sender_id =</span><input type="number" id="ps" min="1" max="128" value="${sender}"><span class="mono" style="font-size:13px">seq =</span><input type="number" id="pq" min="1" max="4294967295" value="${seq}"></div>
+       <div class="mono" style="font-size:13px">${step===0?'(not started)':'executed: <b>'+esc(P[step-1].txt)+'</b>'}</div>
+       <div class="cells" style="padding-bottom:16px">${r.cells.map((c,i)=>`<div class="cellb ${c!==null?'fill':''} ${r.p===i?'ptr':''}">${c===null?(step>=1?'<span class="muted">?</span>':''):esc(c==='\\n'?'\\n':c)}<span class="i">${i}</span></div>`).join('')}</div>
+       ${r.p!==null?`<span class="ptrlab">p → line[${r.p}] (outlined)${r.len!==null?` · p − line = ${r.len}`:''}</span>`:''}
+       <div class="fb ${step===P.length?'good':'warn'}">${step===0?'Press "next statement" to run line 26.':esc(r.msg)}</div>
+       <div class="row"><button id="pb" ${step===0?'disabled':''}>← back</button><button class="primary" id="pn" ${step===P.length?'disabled':''}>next statement</button><button id="pr">restart</button></div>`;
+     w.querySelector('#pn').onclick=()=>{ step++; draw(); }; w.querySelector('#pb').onclick=()=>{ step--; draw(); }; w.querySelector('#pr').onclick=()=>{ step=0; draw(); };
+     w.querySelector('#ps').onchange=e=>{ sender=Math.max(1,Math.min(128,Number(e.target.value)||1)); draw(); };
+     w.querySelector('#pq').onchange=e=>{ seq=Math.max(0,Math.min(4294967295,Number(e.target.value)||0)); draw(); }; };
+   draw();
+ },
+ flush(w){
+   const START='d 1 1\nd 1 2\nd 1 3\nd 2 1\n'; let buf=START, done=0, file='', state='run', log=[];
+   const reset=()=>{ buf=START; done=0; file=''; state='run'; log=[]; };
+   const write=kind=>{ if(state!=='run') return; const left=buf.length-done;
+     if(kind==='all'){ file+=buf.slice(done); log.push(`write(fd, data()+${done}, ${left}) = ${left}`); done+=left; }
+     else if(kind==='part'){ const k=Math.max(1,Math.min(left-1,5)); file+=buf.slice(done,done+k); log.push(`write(fd, data()+${done}, ${left}) = ${k}   ← partial`); done+=k; }
+     else if(kind==='eintr'){ log.push(`write(fd, data()+${done}, ${left}) = -1 EINTR   → continue`); }
+     else if(kind==='err'){ log.push(`write(fd, data()+${done}, ${left}) = -1 EIO   → erase(0, ${done}), return false`); buf=buf.slice(done); done=0; state='fail'; }
+     if(state==='run' && done>=buf.length){ log.push('loop ends: done == size() → buff_.clear(), return true'); buf=''; done=0; state='ok'; } };
+   const draw=()=>{ const left=buf.length-done;
+     w.innerHTML=`<span class="lab">you are the kernel: what does this write() return?</span>
+       <div class="kv"><dt>buff_.size()</dt><dd>${buf.length}</dd><dt>done</dt><dd>${done}</dd><dt>asking for</dt><dd>${state==='run'?left+' bytes, starting at data() + '+done:'—'}</dd></div>
+       <span class="lab">buff_ (green = already written)</span>
+       <div class="file">${buf?`<span style="background:color-mix(in srgb, var(--good) 25%, transparent)">${esc(buf.slice(0,done))}</span>${esc(buf.slice(done))}`:'<span class="muted">(empty)</span>'}</div>
+       <span class="lab">the file on disk</span><div class="file">${esc(file)||'<span class="muted">(empty)</span>'}</div>
+       <div class="row"><button class="primary" data-k="all" ${state!=='run'?'disabled':''}>write everything</button><button data-k="part" ${state!=='run'||left<2?'disabled':''}>partial: 5 bytes</button><button data-k="eintr" ${state!=='run'?'disabled':''}>interrupted (EINTR)</button><button data-k="err" ${state!=='run'?'disabled':''}>disk error (EIO)</button><button id="fr">reset</button></div>
+       <div class="tracelog">${log.map(l=>`<span>${esc(l)}</span>`).join('')||'<span class="muted">flush() called: done = 0</span>'}</div>
+       ${state==='ok'?'<div class="fb good">flush() returned true. Every byte reached the file, even through partial writes and interruptions.</div>':state==='fail'?'<div class="fb bad">flush() returned false. The unwritten bytes are still in buff_ for a later attempt; the written ones were erased so they won\'t be written twice.</div>':''}`;
+     w.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ write(b.dataset.k); draw(); });
+     w.querySelector('#fr').onclick=()=>{ reset(); draw(); }; };
+   draw();
+ },
+};
+render();
+})();
+</script>
+</body>
+</html>
